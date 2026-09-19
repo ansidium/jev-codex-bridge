@@ -15,6 +15,10 @@ update setting. A stopped service reports `ready: false`.
 | `JevCodexBridge` | At login; restarts after a process failure |
 | `JevCodexBridge-Update` | Daily at 10:00 local time |
 
+10:00 is the initial schedule. To change it, open **Task Scheduler**, select
+`JevCodexBridge-Update`, then edit its trigger under **Properties > Triggers**.
+Source updates preserve the schedule you set.
+
 Both tasks run under the signed-in user, independently of Codex Desktop. They
 require that user to be logged in. Missed scheduled runs use the next available
 opportunity. `service start`, `stop`, `restart`, `status` and `remove` manage them.

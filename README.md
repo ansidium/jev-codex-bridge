@@ -66,7 +66,7 @@ Codex Desktop / CLI
 Each decision appears in the task:
 
 ```text
-[Jev] routed this turn to gpt-5.6-luna (jev, confidence 0.85, effort low).
+[Jev] routed this turn to gpt-6-astra (jev, confidence 0.88, effort xhigh).
 ```
 
 Run `$jev-explain` in Codex to inspect the recommendation, selected model,
@@ -88,10 +88,8 @@ The bridge does not control when Codex delegates work to agents.
 
 ## Updates
 
-The Windows service starts at login and checks this repository's `main` branch
-daily at 10:00 local time. Updates install into a separate directory, using the
-committed dependency versions. Syntax checks and tests must pass before activation.
-Edited installations are left intact.
+Windows setup enables startup at login and automatic updates.
+New versions are tested before activation.
 
 The service switches versions after active requests finish. There is a brief
 reconnect during the restart. The previous version remains available:
