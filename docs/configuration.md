@@ -30,6 +30,28 @@ the original file, including comments, under `backups/`. Serialization normalize
 the active file's formatting. `jev-bridge restore-config` restores the exact backup
 only if the active file has not been edited since setup.
 
+## Existing tasks
+
+Changing the model in an existing task does not change its provider. A task
+created with OpenAI can therefore send `jev-router` directly to OpenAI, which
+rejects it as an unsupported model.
+
+Close Codex Desktop and any CLI using the task, then run:
+
+```sh
+jev-bridge attach THREAD_ID
+```
+
+Use the UUID from the task's copied link. Reopen Codex afterward. The command
+uses Codex's local app-server to resume the same task with the `jev` provider and
+`jev-router` model. It preserves the conversation and sends no prompt to a model.
+The bridge service must be running, and Codex must be on `PATH`.
+
+An active writer is left intact: the command asks you to close that Codex process
+and retry. It does not edit the database or rollout files directly, interrupt work, or
+change other tasks. New tasks use the provider chosen during installation and
+do not need this step. Codex continues to use its existing ChatGPT or API login.
+
 ## Model policy
 
 The account catalog supplies the available model IDs and reasoning capabilities.

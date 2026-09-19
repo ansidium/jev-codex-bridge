@@ -8,6 +8,8 @@ import { activate, readJson, resolveHome, rollbackInstallation, run, saveJson, S
 import { configureCodex, restoreCodex } from "./desktop-config.mjs";
 import { health, startDesktopServer } from "./desktop-server.mjs";
 import { installCodexSkill } from "./codex-cli.mjs";
+import { attachThread } from "./attach-thread.mjs";
+import { parse } from "smol-toml";
 
 const help = `Jev Codex Bridge
   install [--key-file PATH] [--port 18767] [--codex-home PATH]
@@ -17,6 +19,7 @@ const help = `Jev Codex Bridge
   service schedule --update-time HH:mm
   auto-update on|off
   configure | restore-config
+  attach THREAD_ID [--codex-home PATH]
 All commands accept --home PATH (or JEV_BRIDGE_HOME).
 Desktop service installation uses Windows Task Scheduler. On other platforms,
 use install --no-service, then serve under your own process supervisor.
@@ -140,6 +143,17 @@ export async function main(args) {
       console.log(`Installed ${candidate.version} in ${home}`); return;
     }
     if (command === "restore-config") { console.log(restoreCodex(home)); return; }
+    if (command === "attach") {
+      if (!(await health(home)).ready) throw new Error("Start the service before attaching a thread.");
+      const codexHome = resolve(values["codex-home"] ?? process.env.CODEX_HOME ?? join(homedir(), ".codex"));
+      const config = parse(readFileSync(join(codexHome, "config.toml"), "utf8"));
+      const { port } = readJson(join(home, "settings.json"));
+      if (config.model_providers?.jev?.base_url !== `http://127.0.0.1:${port}`) {
+        throw new Error("Configure this Codex home for the running bridge before attaching a thread.");
+      }
+      console.log(JSON.stringify(await attachThread(option, { codexHome })));
+      return;
+    }
     if (command === "configure") {
       if (existsSync(join(home, "codex-config.json"))) throw new Error("Configuration backup already exists; inspect it before configuring again.");
       if (!(await health(home)).ready) throw new Error("Start the service before configuring Codex.");

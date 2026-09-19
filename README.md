@@ -36,7 +36,12 @@ jev-bridge status
 ```
 
 Restart Codex Desktop. **Jev Router** appears in the model picker and becomes the
-default. Choosing a concrete model pauses routing; choosing Jev Router resumes it.
+default for new tasks. In tasks connected to the bridge, choosing a concrete model
+pauses routing; choosing Jev Router resumes it.
+
+Existing tasks retain their original provider. To connect one, close Codex Desktop
+and any CLI using that task, then run `jev-bridge attach THREAD_ID` and reopen Codex.
+The ID is the UUID in the task's copied link. History stays in the same task.
 
 The installer backs up `config.toml` before writing the provider settings.
 Other settings are preserved; TOML formatting is normalized.
