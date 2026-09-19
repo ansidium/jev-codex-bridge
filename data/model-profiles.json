@@ -1,0 +1,79 @@
+{
+  "asOf": "2026-09-19",
+  "benchmark": {
+    "name": "Artificial Analysis Intelligence Index v4.3",
+    "methodology": "https://artificialanalysis.ai/methodology/intelligence-benchmarking",
+    "costUnit": "USD per benchmark task",
+    "costIncludes": ["input", "cache reads", "cache writes", "reasoning output", "answer output"],
+    "limitations": "Rounded aggregate scores from primarily English-language tasks; not a guarantee of task success or a Codex usage forecast."
+  },
+  "pricing": {
+    "source": "https://developers.openai.com/api/docs/pricing",
+    "unit": "USD per million tokens, Standard API processing",
+    "solPromotionThrough": "2026-11-21"
+  },
+  "reasoningSource": "https://developers.openai.com/api/docs/guides/reasoning",
+  "fallbackEffortOrder": ["none", "low", "medium", "high", "xhigh", "max", "ultra"],
+  "models": {
+    "gpt-5.6-luna": {
+      "reasoningFamily": "gpt-5.6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-5-6-luna",
+      "rates": { "input": 0.20, "cachedInput": 0.02, "cacheWrite": 0.25, "output": 1.20 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+        "rates": { "input": 0.40, "cachedInput": 0.04, "cacheWrite": 0.50, "output": 1.80 } },
+      "efforts": {
+        "low": { "intelligence": 22, "costPerTaskUSD": 0.01 },
+        "medium": { "intelligence": 25, "costPerTaskUSD": 0.02 },
+        "high": { "intelligence": 32, "costPerTaskUSD": 0.04 },
+        "xhigh": { "intelligence": 35, "costPerTaskUSD": 0.09 },
+        "max": { "intelligence": 38, "costPerTaskUSD": 0.18 }
+      }
+    },
+    "gpt-5.6-terra": {
+      "reasoningFamily": "gpt-5.6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-5-6-terra",
+      "rates": { "input": 2.00, "cachedInput": 0.20, "cacheWrite": 2.50, "output": 12.00 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+        "rates": { "input": 4.00, "cachedInput": 0.40, "cacheWrite": 5.00, "output": 18.00 } },
+      "efforts": {
+        "low": { "intelligence": 28, "costPerTaskUSD": 0.14 },
+        "medium": { "intelligence": 30, "costPerTaskUSD": 0.18 },
+        "high": { "intelligence": 34, "costPerTaskUSD": 0.34 },
+        "xhigh": { "intelligence": 38, "costPerTaskUSD": 0.63 },
+        "max": { "intelligence": 42, "costPerTaskUSD": 1.40 }
+      }
+    },
+    "gpt-5.6-sol": {
+      "reasoningFamily": "gpt-5.6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-5-6-sol",
+      "rates": { "input": 4.00, "cachedInput": 0.40, "cacheWrite": 5.00, "output": 20.00 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+        "rates": { "input": 8.00, "cachedInput": 0.80, "cacheWrite": 10.00, "output": 30.00 } },
+      "efforts": {
+        "low": { "intelligence": 34, "costPerTaskUSD": 0.26 },
+        "medium": { "intelligence": 39, "costPerTaskUSD": 0.50 },
+        "high": { "intelligence": 42, "costPerTaskUSD": 0.81 },
+        "xhigh": { "intelligence": 44, "costPerTaskUSD": 1.18 },
+        "max": { "intelligence": 47, "costPerTaskUSD": 1.99 }
+      }
+    },
+    "gpt-6-astra": {
+      "reasoningFamily": "gpt-6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-6-astra",
+      "rates": { "input": 10.00, "cachedInput": 1.00, "cacheWrite": 12.50, "output": 50.00 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "rates": { "input": 20.00, "cachedInput": 2.00, "cacheWrite": 25.00, "output": 75.00 } },
+      "efforts": {
+        "low": { "intelligence": 46, "costPerTaskUSD": 0.82 },
+        "medium": { "intelligence": 50, "costPerTaskUSD": 1.54 },
+        "high": { "intelligence": 51, "costPerTaskUSD": 1.72 },
+        "xhigh": { "intelligence": 53, "costPerTaskUSD": 2.31 },
+        "max": { "intelligence": 53, "costPerTaskUSD": 3.26 }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "jev-codex-bridge",
+  "version": "0.1.0",
+  "description": "Model and reasoning routing for Codex Desktop and CLI, with a Windows service and validated updates",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/ansidium/jev-codex-bridge.git" },
+  "engines": { "node": ">=24" },
+  "bin": { "jev-bridge": "bin/jev-bridge.mjs", "jev-codex": "bin/jev-codex.mjs", "jev-explain": "bin/jev-explain.mjs" },
+  "files": ["bin", "src", "data", "scripts", "skills", "test", "docs", "README.md", "NOTICE", "LICENSE", "npm-shrinkwrap.json"],
+  "scripts": { "test": "node --test \"test/**/*.test.mjs\"", "check": "node scripts/check-source.mjs" },
+  "dependencies": { "@typesafe-ai/sdk": "^0.6.0", "smol-toml": "^1.4.2" }
+}
