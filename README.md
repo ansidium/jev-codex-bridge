@@ -83,7 +83,8 @@ The routing policy:
 - Reads model IDs and supported reasoning levels from the account catalog.
 - Compares model-and-effort pairs using dated benchmark scores, task costs and
   token prices. Required quality takes priority over cost.
-- Includes the previous user request so a short “go ahead” retains its context.
+- Reads the task history, constraints, assistant responses and tool results so a
+  short “go ahead” retains the underlying work and unresolved failures.
 - Treats your reasoning selection as a ceiling. A model without Ultra support
   uses a supported level within that ceiling.
 - Keeps the current model if Jev fails. Low confidence prevents a downgrade.
@@ -113,13 +114,17 @@ Service controls, logs and removal are covered in [operations](docs/operations.m
 
 ## Data and limits
 
-TypeSafe receives the current user text, up to 8,000 characters of the previous
-request, approximate context size and model metadata. The full Codex request goes
-to OpenAI. Local explanation files contain prompt text and classification results;
-keep them private.
+TypeSafe receives the current user text, visible task history and tool inputs and
+results, approximate context size and model metadata. There is no default 8,000
+character cut on the previous request. Images and other media are represented by
+text indicators; encrypted reasoning is omitted. The full Codex request goes to
+OpenAI. Local explanation files contain the routing context and classification
+results; keep them private.
 
-The previous-request limit is configurable. Longer requests keep their beginning
-and end. This limit applies to routing; Codex still receives the full conversation.
+The default `task` context omits global instructions and tool schemas. Set
+`JEV_ROUTING_CONTEXT=full` to include them, or `previous` for current and previous
+user requests only. Context is fitted to Jev's input window, with omission markers
+when needed; Codex's conversation is unchanged. See [configuration](docs/configuration.md).
 
 The service listens on `127.0.0.1`, requires Codex authorization, and rejects browser
 requests with an Origin header. It is intended for a single local user.

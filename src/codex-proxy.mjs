@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { availableTiers, THRESHOLDS, previousRoutingContext } from "./config.mjs";
 import { askJev } from "./router.mjs";
+import { codexRoutingContext, textForRouting as textOf } from "./routing-context.mjs";
 import { decide, detectOverride } from "./policy.mjs";
 import { codexProfiles, fallbackProfile, frontierProfiles, PROFILE_DATA } from "./profiles.mjs";
 import { log } from "./log.mjs";
@@ -49,15 +50,6 @@ export function codexModels(models = new Map(), responsesLite = false) {
       tier: codexTierOf(model.slug),
     }));
 }
-
-const textOf = (content) => {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((item) => item?.type === "text" || item?.type === "input_text")
-    .map((item) => item.text)
-    .join("\n");
-};
 
 const cleanPrompt = (text) =>
   text
@@ -233,7 +225,7 @@ export async function startCodexProxy({
               const frontier = new Set(frontierProfiles(eligible).map(profile => profile.id));
               const options = eligible.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
               const jev = await route({ prompt, current, contextTokens, profiles: options,
-                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body) });
+                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation: codexRoutingContext(body, undefined, prompt) });
               const decision = decide({ prompt, jev, current, profiles: eligible, contextTokens, hasPriorModel: Boolean(priorModel) });
               selected = decision.profile;
               routing = {

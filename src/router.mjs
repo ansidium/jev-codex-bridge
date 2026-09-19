@@ -8,9 +8,9 @@ import {
 } from "./config.mjs";
 import { log } from "./log.mjs";
 import { PROFILE_DATA } from "./profiles.mjs";
+import { fitRoutingState, routingContextMode, routingStateBudget } from "./routing-context.mjs";
 
-// The SDK's defaults (10s per attempt, 2 retries, no total budget) are far too slow for a
-// per-prompt hot path, so the timeout, retry count and an outer deadline are all pinned.
+// Bound total routing time even when the SDK retries or Jev needs a smaller context.
 // Built lazily because the constructor throws when no key is present, and a missing key
 // should degrade to "no routing", not stop the session from starting.
 let client;
@@ -30,26 +30,42 @@ function getClient() {
  *
  * @returns {Promise<?{choice: string, confidence: number, probabilities: object, metrics: object, ms: number}>}
  */
-export async function askJev({ prompt, current, contextTokens, profiles, previousPrompt }) {
+export async function askJev({ prompt, current, contextTokens, profiles, previousPrompt, conversation }) {
   if (!profiles?.length) return null;
   const started = Date.now();
   const abort = new AbortController();
   const deadline = setTimeout(() => abort.abort(), THRESHOLDS.jevDeadlineMs);
-  const previousRequest = previousRoutingContext(previousPrompt);
-  const request = {
-    state: {
-      request: prompt,
-      session: { current_model: current.model, current_effort: current.effort,
-        reasoning_family: current.reasoningFamily, approximate_context_tokens: contextTokens },
-      environment: { available_profiles: profiles.map(profile => profile.id),
-        evidence: { as_of: PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
-          cost_unit: PROFILE_DATA.benchmark.costUnit, limitations: PROFILE_DATA.benchmark.limitations } },
-      ...(previousRequest ? { previous_request: previousRequest } : {}),
-    },
-    questions: { ...QUESTIONS, profile: questionForProfiles(profiles) },
-  };
   try {
-    const result = await getClient().systemOne(request, { signal: abort.signal });
+    const mode = routingContextMode();
+    const previousRequest = previousRoutingContext(previousPrompt);
+    if (mode === "previous") conversation = undefined;
+    const previousIncluded = previousRequest && conversation?.includes(JSON.stringify(previousRequest).slice(1, -1));
+    const original = {
+      state: {
+        request: prompt,
+        session: { current_model: current.model, current_effort: current.effort,
+          reasoning_family: current.reasoningFamily, approximate_context_tokens: contextTokens },
+        environment: { available_profiles: profiles.map(profile => profile.id),
+          evidence: { as_of: PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
+            cost_unit: PROFILE_DATA.benchmark.costUnit, limitations: PROFILE_DATA.benchmark.limitations } },
+        ...(previousRequest && !previousIncluded ? { previous_request: previousRequest } : {}),
+        ...(conversation ? { conversation } : {}),
+      },
+      questions: { ...QUESTIONS, profile: questionForProfiles(profiles) },
+    };
+    let budget = routingStateBudget(original.questions);
+    let result, request;
+    for (;;) {
+      request = { ...original, state: fitRoutingState(original.state, budget, mode) };
+      try {
+        result = await getClient().systemOne(request, { signal: abort.signal });
+        break;
+      } catch (error) {
+        if (error.status !== 400 || error.body?.detail?.error_type !== "max_tokens_exceeded" ||
+            abort.signal.aborted || budget < 1024) throw error;
+        budget = Math.floor(budget / 2);
+      }
+    }
     const { profile: answer, task_complexity, reasoning_required, tool_complexity } = result.answers;
     return {
       ...answer,

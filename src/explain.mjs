@@ -39,6 +39,8 @@ export function formatExplanation(status) {
     ...wrapped(`Current ${pair || answers?.model ? "model" : "tier"}: `, (request?.session?.current_model ?? "unknown").toUpperCase()),
     ...(request?.session?.current_effort ? [row(`Current effort: ${request.session.current_effort}`)] : []),
     row(`Context tokens: ${request?.session?.approximate_context_tokens ?? request?.session?.context_tokens ?? "unknown"}`),
+    ...(request?.routing_context ? [row(`Routing context: ${request.routing_context.mode}`),
+      row(`Context shortened: ${request.routing_context.shortened ? "yes" : "no"}`)] : []),
     row(),
     row("Jev response"),
     row(`Task complexity     ${metric(m.taskComplexity)}`),

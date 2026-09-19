@@ -9,7 +9,7 @@ test("formats the last routing decision", () => {
     confidence: 0.94,
     reason: "jev",
     jev: {
-      request: { state: { session: { current_model: "haiku", context_tokens: 6200 } } },
+      request: { state: { session: { current_model: "haiku", context_tokens: 6200 }, routing_context: { mode: "task", shortened: true } } },
       response: { answers: { model_tier: { choice: "sonnet" } } },
     },
     metrics: {
@@ -24,6 +24,8 @@ test("formats the last routing decision", () => {
   assert.match(output, /Prompt: Explain the router/);
   assert.match(output, /Current tier: HAIKU/);
   assert.match(output, /Context tokens: 6200/);
+  assert.match(output, /Routing context: task/);
+  assert.match(output, /Context shortened: yes/);
   assert.match(output, /Recommended tier: SONNET/);
   assert.match(output, /Selected model: SONNET/);
   assert.match(output, /Confidence: 94%/);

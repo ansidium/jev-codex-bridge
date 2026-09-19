@@ -85,16 +85,45 @@ The CLI additionally loads `.env` in its working directory, then
 `~/.jev-router.env` and the legacy `~/.jev-claude.env`. The Desktop service reads
 only its configured key file. Restart the service after changing that file.
 
-`JEV_PREVIOUS_CONTEXT_CHARS` sets how much of the previous user request goes to
-Jev (default `8000`; `0` disables it; otherwise `256` to `32000`). Long requests
-retain their beginning and end with an omission marker. The current user request
-is sent in full. This setting changes routing context, not Codex's conversation.
+## Routing context
+
+`JEV_ROUTING_CONTEXT` selects the text made available to Jev:
+
+| Value | Data sent |
+| --- | --- |
+| `task` (default) | Current request, visible message history, repository constraints, reasoning summaries, tool calls and results |
+| `full` | The same history plus global Codex instructions and tool schemas |
+| `previous` | Current and previous user requests without the message/tool history |
+
+The previous request is also supplied when it is missing from the received
+history, including after a service restart. Image, audio and file content becomes
+a text indicator; Jev cannot inspect it. Encrypted reasoning, authentication
+headers and binary media are not sent. Environment-only injected messages are
+omitted. Task and sub-agent contexts remain isolated.
+
+There is no default character limit on a previous request. The optional
+`JEV_PREVIOUS_CONTEXT_CHARS` retains its explicit override (`0` or an integer of
+at least `256`). It affects the separate previous-request field, not messages in
+the task history. To reproduce the earlier data selection, use
+`JEV_ROUTING_CONTEXT=previous` with `JEV_PREVIOUS_CONTEXT_CHARS=8000`.
+
+[Jev 1.13](https://docs.typesafe.ai/models) allows 32k tokens for state plus the
+longest question, and 64k for state plus all questions. The bridge estimates an
+initial byte budget after accounting for questions and model choices. If Jev
+returns `max_tokens_exceeded`, it retries with a smaller context within the same
+10-second total deadline. This is an estimate, not a local Jev tokenizer.
+
+When fitting is necessary, excerpts retain the beginning and end, including the
+task's opening and latest results, and mark omissions explicitly. The current
+request has priority; an oversized current request may itself need an excerpt.
+`$jev-explain` reports the mode and whether fitting occurred. All of this changes
+only routing data; the original Codex history still goes to OpenAI.
 
 ## Diagnostics
 
 Explanation files use the legacy `jev-claude` folder inside Node's OS temp
-directory. Each task retains its last 20 decisions, including prompt text and Jev
-exchanges. Files untouched for seven days are pruned on a later diagnostic write.
+directory. Each task retains its last 20 decisions, including prompt text, task
+context, tool evidence and Jev exchanges. Files untouched for seven days are pruned on a later diagnostic write.
 Unix permissions are owner-only; Windows uses the user's temp-directory ACLs.
 
 `JEV_DEBUG` adds routing logs. `JEV_DUMP` writes full request bodies to files under

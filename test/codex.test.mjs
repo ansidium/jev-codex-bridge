@@ -178,7 +178,7 @@ test("large fresh Desktop chats can start cheap and restore their model after re
   assert.equal(catalogFetches, 2);
 });
 
-test("previous task context skips injected environment messages and remains bounded", () => {
+test("previous task context skips injected environment messages without an arbitrary default cut", () => {
   const input = [
     { role: "user", content: "Investigate the database race" },
     { role: "user", content: "<environment_context>metadata</environment_context>" },
@@ -187,10 +187,10 @@ test("previous task context skips injected environment messages and remains boun
   assert.equal(codexPreviousUserPrompt({ input }), "Investigate the database race");
   input[0].content = "Investigate a distributed race. " + "x".repeat(12000) + " Preserve transaction invariants.";
   const previous = codexPreviousUserPrompt({ input });
-  assert.equal(previous.length, 8000);
+  assert.equal(previous, input[0].content);
   assert.match(previous, /^Investigate a distributed race/);
   assert.match(previous, /Preserve transaction invariants\.$/);
-  assert.match(previous, /previous request shortened/);
+  assert.doesNotMatch(previous, /previous request shortened/);
 });
 
 test("previous routing context can be sized or disabled without dropping task boundaries", () => {
@@ -247,6 +247,10 @@ test("reads only fresh Codex user turns", () => {
   assert.equal(codexNewTurnPrompt(body), "Fix the bug");
   body.input.push({ type: "function_call_output", call_id: "1", output: "done" });
   assert.equal(codexNewTurnPrompt(body), null);
+  assert.match(codexNewTurnPrompt({ input: [
+    { type: "additional_tools", role: "developer", tools: [] },
+    { role: "user", content: [{ type: "input_image", image_url: "data:image/png;base64,synthetic" }] },
+  ] }), /input_image: contents unavailable/);
   assert.equal(
     codexNewTurnPrompt({
       input: [

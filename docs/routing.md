@@ -39,7 +39,7 @@ prices and evaluations change.
 ## How evidence affects a decision
 
 Jev receives the supported pairs, measurements, context size, current pair and
-previous request. It chooses a pair and separately scores task, reasoning and
+task history with tool evidence. It chooses a pair and separately scores task, reasoning and
 tool complexity. These scores are diagnostics, not a weighted pricing formula.
 [TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
 independently; it does not run the candidate models or verify their answers.
@@ -59,7 +59,17 @@ subscription usage. It cannot force a downgrade.
 ## Continuing work
 
 Model and effort stay fixed through tool continuations. For a new user message,
-the previous request helps distinguish a continuation from a new task.
+the task history and recent results help distinguish a continuation from a new task.
+The previous request is a fallback when it is absent from the supplied history.
+The current request defines the work when the user explicitly starts a new task.
+
+The default task context leaves out global instructions and tool schemas. A
+`full` mode includes those fields for comparisons. TypeSafe documents that
+[irrelevant detail can reduce accuracy](https://docs.typesafe.ai/model-jaggedness/jev-1.13),
+so a larger state is not automatically a better one. Both modes use the same
+model-and-effort candidates; the context mode does not restrict Jev's choices.
+See [configuration](configuration.md#routing-context) for the input-window limits,
+fitting behavior and data sent to TypeSafe.
 
 Native context compaction uses the last eligible model and reasoning effort,
 including after a bridge restart. If no selection exists, it uses the normal
