@@ -30,6 +30,10 @@ require that user to be logged in. Missed scheduled runs use the next available
 opportunity. `service start`, `stop`, `restart`, `status` and `remove` manage them.
 Stopping refuses while a request is active; retry after the turn finishes.
 
+The Windows launcher runs without a console window and records process output
+in the installation logs. Updates refresh the task actions without changing their
+triggers. `service start` also refreshes the launcher for an existing installation.
+
 ## Update and rollback
 
 `jev-bridge update` fetches an exact revision of this repository's `main` branch,

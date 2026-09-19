@@ -277,6 +277,7 @@ export async function startCodexProxy({
         }
       }
 
+      if (res.destroyed) return;
       const base = upstreamFor(req.headers, req.url, chatgptBaseURL, apiBaseURL);
       const target = new URL(base);
       const transport = target.protocol === "http:" ? http : https;
@@ -345,6 +346,7 @@ export async function startCodexProxy({
           });
         },
       );
+      res.once("close", () => { if (!res.writableEnded) upstream.destroy(); });
       upstream.on("error", (err) => {
         debug(`codex upstream error: ${err.message}`);
         if (!res.headersSent) res.writeHead(502, { "content-type": "application/json" });

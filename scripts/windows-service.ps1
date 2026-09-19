@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('install','start','stop','restart','status','remove','schedule')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('install','start','stop','restart','status','remove','schedule','refresh')][string]$Action,
     [Parameter(Mandatory)][string]$BridgeHome,
     [Parameter(Mandatory)][string]$Node,
     [ValidatePattern('^([01][0-9]|2[0-3]):[0-5][0-9]$')][string]$UpdateTime
@@ -9,31 +9,35 @@ $settings = Get-Content -LiteralPath (Join-Path $BridgeHome 'settings.json') -Ra
 $taskName = $settings.taskName
 $updateTaskName = $taskName + '-Update'
 $launcher = Join-Path $BridgeHome 'launch.mjs'
-$runner = Join-Path $BridgeHome 'run-service.ps1'
+
+function New-ServiceAction([string]$Mode) {
+    $source = Join-Path $PSScriptRoot 'WindowsServiceHost.cs'
+    $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.Substring(0, 16).ToLowerInvariant()
+    $serviceHostPath = Join-Path $BridgeHome ('service-host-' + $hash + '.exe')
+    if (-not (Test-Path -LiteralPath $serviceHostPath)) {
+        Add-Type -Path $source -OutputAssembly $serviceHostPath -OutputType WindowsApplication
+    }
+    $arguments = '"' + $BridgeHome + '" "' + $Node + '" ' + $Mode
+    New-ScheduledTaskAction -Execute $serviceHostPath -Argument $arguments -WorkingDirectory $BridgeHome
+}
+
+function Update-ServiceActions {
+    foreach ($mode in @('serve','update')) {
+        $name = if ($mode -eq 'serve') { $taskName } else { $updateTaskName }
+        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
+            Set-ScheduledTask -TaskName $name -Action (New-ServiceAction $mode) | Out-Null
+        }
+    }
+}
 
 if ($Action -eq 'install') {
     foreach ($name in @($taskName, $updateTaskName)) {
         if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { throw "Task $name already exists; choose a different --task-name." }
     }
-    # Task Scheduler owns this hidden foreground process, independent of Codex.
-    $runnerText = @'
-param([string]$Node, [string]$Mode)
-$ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath $PSScriptRoot
-$log = Join-Path $PSScriptRoot ($Mode + '.log')
-if ((Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -gt 5MB) {
-    Move-Item -LiteralPath $log -Destination ($log + '.previous') -Force
-}
-& $Node (Join-Path $PSScriptRoot 'launch.mjs') $Mode --automatic *>> $log
-exit $LASTEXITCODE
-'@
-    [IO.File]::WriteAllText($runner, $runnerText, [Text.UTF8Encoding]::new($false))
     $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-    $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     foreach ($mode in @('serve','update')) {
-        $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runner + '" -Node "' + $Node + '" -Mode ' + $mode
-        $taskAction = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $BridgeHome
+        $taskAction = New-ServiceAction $mode
         if ($mode -eq 'serve') {
             $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
             $taskSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
@@ -53,6 +57,8 @@ exit $LASTEXITCODE
     Write-Output ('Update schedule: daily at ' + $UpdateTime + ' local time')
 } elseif ($Action -eq 'status') {
     Get-ScheduledTask -TaskName $taskName,$updateTaskName | Select-Object TaskName,State
+} elseif ($Action -eq 'refresh') {
+    Update-ServiceActions
 } else {
     if ($Action -in @('stop','restart','remove')) {
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -67,7 +73,10 @@ exit $LASTEXITCODE
             if ($task.State -eq 'Running') { throw 'Service is still stopping; retry later.' }
         }
     }
-    if ($Action -in @('start','restart')) { Start-ScheduledTask -TaskName $taskName }
+    if ($Action -in @('start','restart')) {
+        Update-ServiceActions
+        Start-ScheduledTask -TaskName $taskName
+    }
     if ($Action -eq 'remove') {
         foreach ($name in @($taskName, $updateTaskName)) {
             if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {

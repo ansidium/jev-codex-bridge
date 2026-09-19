@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs, parseEnv } from "node:util";
-import { activate, readJson, resolveHome, rollbackInstallation, run, saveJson, SOURCE, stageLocal, updateInstallation, withLock } from "./installation.mjs";
+import { activate, readJson, resolveHome, rollbackInstallation, run, saveJson, stageLocal, updateInstallation, withLock } from "./installation.mjs";
 import { configureCodex, restoreCodex } from "./desktop-config.mjs";
 import { health, startDesktopServer } from "./desktop-server.mjs";
 import { installCodexSkill } from "./codex-cli.mjs";
@@ -31,9 +31,10 @@ export function updateTime(value = new Date().toTimeString().slice(0, 5)) {
 }
 function service(home, action, time) {
   if (process.platform !== "win32") throw new Error("Service management currently requires Windows; use serve on this platform.");
+  const root = readJson(join(home, "state.json")).active.root;
   return run("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
-    join(SOURCE, "scripts", "windows-service.ps1"), "-Action", action, "-BridgeHome", home, "-Node", process.execPath,
-    ...(time ? ["-UpdateTime", time] : [])], SOURCE, 30_000);
+    join(root, "scripts", "windows-service.ps1"), "-Action", action, "-BridgeHome", home, "-Node", process.execPath,
+    ...(time ? ["-UpdateTime", time] : [])], root, 30_000);
 }
 async function shutdown(home) {
   const { port } = readJson(join(home, "settings.json"));
@@ -173,6 +174,7 @@ export async function main(args) {
       if (values.automatic && !readJson(join(home, "state.json")).autoUpdate) return;
       try {
         const result = updateInstallation(home);
+        if (process.platform === "win32") service(home, "refresh");
         saveJson(join(home, "update-status.json"), { ...result, checkedAt: new Date().toISOString() });
         console.log(JSON.stringify(result));
       } catch (error) {
