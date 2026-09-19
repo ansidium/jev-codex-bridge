@@ -77,6 +77,8 @@ test("Desktop explanation isolates chats and preserves the last decision during 
   await send(threadB, "beta chat decision", "jev-router", { bodyId: true });
   assert.deepEqual(previousPrompts, [undefined, undefined]);
   assert.equal(readStatus(statusA)?.prompt, "alpha chat decision");
+  assert.equal(readStatus(statusA)?.previousModel, "gpt-5.6-sol");
+  assert.equal(readStatus(statusA)?.previousReasoningEffort, "max");
   assert.equal(readStatus(statusB)?.prompt, "beta chat decision");
   assert.match(explainCommand(threadA), /Prompt: alpha chat decision/);
   assert.match(explainCommand(threadB), /Prompt: beta chat decision/);
@@ -367,7 +369,8 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   t.after(() => upstream.close());
   const upstreamURL = `http://127.0.0.1:${upstream.address().port}`;
-  const statusId = `codex-test-${process.pid}`;
+  const statusId = `codex-test-${randomUUID()}`;
+  t.after(() => { try { unlinkSync(join(STATUS_DIR, `${statusId}.json`)); } catch {} });
   let routeCalls = 0;
   const { port, close } = await startCodexProxy({
     chatgptBaseURL: `${upstreamURL}/backend-api/codex`,

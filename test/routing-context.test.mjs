@@ -110,4 +110,14 @@ test("Jev size rejections retry with more compact evidence; other validation fai
   await askJev(args);
   assert.equal(seen.at(-1).state.conversation, undefined);
   assert.equal(seen.at(-1).state.previous_request, args.previousPrompt);
+  await t.test("the prior model and effort cannot anchor the classification request", async () => {
+    process.env.JEV_ROUTING_CONTEXT = "task";
+    const other = { id: "other@deep", model: "other", effort: "deep", reasoningFamily: "other-family", contextWindow: 200000 };
+    const neutral = { ...args, profiles: [current, other], conversation: "The crash recovery failure is unresolved." };
+    await askJev(neutral);
+    const first = seen.at(-1);
+    assert.deepEqual(first.state.session, { approximate_context_tokens: 50000 });
+    await askJev({ ...neutral, current: other });
+    assert.deepEqual(seen.at(-1), first);
+  });
 });

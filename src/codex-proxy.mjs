@@ -230,6 +230,8 @@ export async function startCodexProxy({
               selected = decision.profile;
               routing = {
                 prompt,
+                previousModel: current.model,
+                previousReasoningEffort: current.effort,
                 tier: selected.tier,
                 model: selected.model,
                 profile: selected.id,

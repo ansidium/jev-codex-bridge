@@ -38,11 +38,15 @@ prices and evaluations change.
 
 ## How evidence affects a decision
 
-Jev receives the supported pairs, measurements, context size, current pair and
+Jev receives the supported pairs, measurements, context size and
 task history with tool evidence. It chooses a pair and separately scores task, reasoning and
 tool complexity. These scores are diagnostics, not a weighted pricing formula.
 [TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
 independently; it does not run the candidate models or verify their answers.
+
+The classifier does not receive the previously selected pair. This prevents the
+previous assignment from anchoring its recommendation. The bridge keeps that
+pair locally for fallback, downgrade checks and explanations.
 
 Pairs with no cheaper, strictly higher-scoring alternative are marked as being
 on the price-quality frontier. This is advisory: equal rounded scores do not
@@ -80,8 +84,8 @@ The bridge passes the compaction input and response through unchanged.
 OpenAI documents that persisted reasoning is reusable within a model family.
 GPT-5.6 Luna, Terra and Sol can reuse each other's reasoning; incompatible
 reasoning is omitted across families. Visible conversation text still passes
-through the bridge. Jev is instructed to avoid a family change for small savings
-when unfinished work depends on earlier reasoning.
+through the bridge. A family change does not exclude a candidate or block an
+upgrade. Downgrade checks run after the classifier's recommendation.
 
 Changing effort can also affect caching. Astra supports `configuration_update`
 in standard single-agent mode, with restrictions on compaction. The bridge

@@ -54,12 +54,14 @@ test("shows Jev's exact recommendation separately from the policy's selected mod
 
 test("explains joint selection and its evidence without turning the score into confidence", () => {
   const output = formatExplanation({ model: "gpt-6-astra", reasoningEffort: "low", confidence: 0.8,
+    previousModel: "gpt-5.6-sol", previousReasoningEffort: "high",
     evidence: { asOf: "2026-09-19", measurement: { intelligence: 46, costPerTaskUSD: 0.82 } },
-    jev: { request: { state: { session: { current_model: "gpt-5.6-sol", current_effort: "high", approximate_context_tokens: 12000 } } },
+    jev: { request: { state: { session: { approximate_context_tokens: 12000 } } },
       response: { answers: { profile: { choice: "gpt-6-astra@low" } } } },
   });
   assert.match(output, /Recommended pair:/);
   assert.match(output, /GPT-6-ASTRA@LOW/);
+  assert.match(output, /Current model: GPT-5\.6-SOL/);
   assert.match(output, /Current effort: high/);
   assert.match(output, /Context tokens: 12000/);
   assert.match(output, /Evidence: 2026-09-19/);
