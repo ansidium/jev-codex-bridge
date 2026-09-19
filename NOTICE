@@ -1,0 +1,14 @@
+Jev Codex Bridge contains Codex routing code derived from Jev Router:
+https://github.com/gargpratyush/jev-router
+Upstream baseline: 38da6b84ea01241bfc41fbddc0928d0f40a703f0 (0.3.0)
+Copyright (c) 2026 Jev Router contributors, MIT License (see LICENSE).
+
+Downstream changes include thread diagnostics, conversation restoration,
+adaptive reasoning, Codex capability guidance, Desktop lifecycle management,
+validated updates, configuration, and their tests.
+
+The adaptive routing discussion at
+https://gist.github.com/antoniolg/62f82f2a5d191fe074e3f5065501993d
+informed the design. No code from that gist is included.
+
+This is an independent integration, not an OpenAI or TypeSafe product.
