@@ -61,6 +61,12 @@ subscription usage. It cannot force a downgrade.
 Model and effort stay fixed through tool continuations. For a new user message,
 the previous request helps distinguish a continuation from a new task.
 
+Native context compaction uses the last eligible model and reasoning effort,
+including after a bridge restart. If no selection exists, it uses the normal
+catalog-based fallback.
+Compaction does not call the classifier or replace the task's routing decision.
+The bridge passes the compaction input and response through unchanged.
+
 OpenAI documents that persisted reasoning is reusable within a model family.
 GPT-5.6 Luna, Terra and Sol can reuse each other's reasoning; incompatible
 reasoning is omitted across families. Visible conversation text still passes

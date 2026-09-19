@@ -199,6 +199,7 @@ export async function startCodexProxy({
           );
           let metadata = {};
           try { metadata = JSON.parse(req.headers["x-codex-turn-metadata"] ?? body.client_metadata?.["x-codex-turn-metadata"] ?? "{}"); } catch {}
+          const isCompaction = metadata?.request_kind === "compaction";
           const isTurn = !metadata?.request_kind || metadata.request_kind === "turn";
           const key = codexConversationKey(body, req.headers);
           if (process.env.JEV_DUMP) {
@@ -219,7 +220,7 @@ export async function startCodexProxy({
             }
             // Restore Desktop's per-thread model after a service restart. Initial
             // instructions alone do not establish a previous model or its cache.
-            const previous = isTurn ? states.get(key) ?? (!statusId && readStatus(requestStatusId)) : null;
+            const previous = isTurn || isCompaction ? states.get(key) ?? (!statusId && readStatus(requestStatusId)) : null;
             const priorModel = profiles.some(profile => profile.model === previous?.model) ? previous.model : null;
             const current = fallbackProfile(profiles, priorModel ?? codexModelOf("opus"), previous?.reasoningEffort);
             const prompt = isTurn ? codexNewTurnPrompt(body) : null;
