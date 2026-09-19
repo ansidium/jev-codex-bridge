@@ -5,6 +5,8 @@ param(
     [ValidatePattern('^([01][0-9]|2[0-3]):[0-5][0-9]$')][string]$UpdateTime
 )
 $ErrorActionPreference = 'Stop'
+# A Node child of PowerShell 7 can inherit its incompatible utility-module path.
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -Force
 $settings = Get-Content -LiteralPath (Join-Path $BridgeHome 'settings.json') -Raw | ConvertFrom-Json
 $taskName = $settings.taskName
 $updateTaskName = $taskName + '-Update'

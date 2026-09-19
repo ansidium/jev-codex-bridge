@@ -36,5 +36,5 @@ test("Windows service host has no console and preserves output, arguments and fa
   assert.deepEqual(readFileSync(join(home, "serve.log.previous")), legacyLog);
   assert(log.includes("\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430"));
   const record = JSON.parse(log.split(/\r?\n/).find(line => line.startsWith("{")));
-  assert.deepEqual(record, { args: ["serve", "--automatic"], cwd: realpathSync(home) });
+  assert.deepEqual(record, { args: ["serve", "--automatic"], cwd: realpathSync.native(home) });
 });
