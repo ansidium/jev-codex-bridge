@@ -381,7 +381,7 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
       return {
         choice: "gpt-5.6-sol@low",
         confidence: 0.91,
-        request: { state: { request: "debug this race" } },
+        request: { state: { request: "use sol to debug this race" } },
         response: { answers: { model: { choice: "gpt-5.6-sol@low", confidence: 0.91 } } },
         metrics: {
           taskComplexity: 0.82,
@@ -407,7 +407,7 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
       prompt_cache_key: "main",
       input: [
         { type: "additional_tools", role: "developer", tools: [{}] },
-        { role: "user", content: [{ type: "input_text", text: "debug this race" }] },
+        { role: "user", content: [{ type: "input_text", text: "use sol to debug this race" }] },
       ],
     }),
   }).then((r) => r.text());
@@ -417,8 +417,8 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   assert.equal(seen[1].body.model, "gpt-5.6-sol");
   assert.equal(readStatus(statusId).tier, "opus");
   assert.equal(readStatus(statusId).model, "gpt-5.6-sol");
-  assert.equal(readStatus(statusId).prompt, "debug this race");
-  assert.equal(readStatus(statusId).jev.request.state.request, "debug this race");
+  assert.equal(readStatus(statusId).prompt, "use sol to debug this race");
+  assert.equal(readStatus(statusId).jev.request.state.request, "use sol to debug this race");
   assert.equal(readStatus(statusId).history.length, 1);
   assert.equal(readStatus(statusId).metrics.reasoningRequired, 0.91);
   assert(response.indexOf("response.created") < response.indexOf("[Jev] routed this turn"));

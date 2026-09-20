@@ -62,19 +62,15 @@ const COMPLEXITY_SCALE = [
 
 export const COMPLEXITY_MAX_SCORE = COMPLEXITY_SCALE.length - 1;
 
-/** Phrases that mean "the human already decided", checked against the raw prompt. */
-export const OVERRIDE_PATTERNS = TIERS.map((t) => ({
-  tier: t.name,
-  re: new RegExp(
-    `^(?:please\\s+)?(?:use|switch to|используй|выбери|переключись на)\\s+(?:${{
-      haiku: "haiku|fast|luna",
-      sonnet: "sonnet|balanced|terra",
-      opus: "opus|strong|sol",
-      fable: "fable|long|astra",
-    }[t.name]})\\b`,
-    "i",
-  ),
-}));
+/** Detect an explicit user choice semantically, using only available model IDs. */
+export const questionForModelRequest = profiles => choice(
+  "Does the current `request` directly and unambiguously instruct using one specific available model for this work? Interpret intent in any language. Use history only to resolve references in that instruction. Mentions, quoted examples, negations, comparisons and hypothetical questions do not select a model. Choose automatic when no single available model is explicitly selected or the reference is ambiguous.",
+  Object.fromEntries([
+    ["automatic", "The user has not explicitly selected one available model; use normal routing."],
+    ...[...new Set(profiles.map(profile => profile.model))].map(model =>
+      [model, `The current request explicitly selects ${model} to perform this work.`]),
+  ]),
+);
 
 export const QUESTIONS = {
   task_complexity: score(

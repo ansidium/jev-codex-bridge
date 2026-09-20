@@ -3,6 +3,7 @@ import {
   COMPLEXITY_MAX_SCORE,
   QUESTIONS,
   questionForProfiles,
+  questionForModelRequest,
   previousRoutingContext,
   THRESHOLDS,
 } from "./config.mjs";
@@ -51,7 +52,7 @@ export async function askJev({ prompt, current, contextTokens, profiles, previou
         ...(previousRequest && !previousIncluded ? { previous_request: previousRequest } : {}),
         ...(conversation ? { conversation } : {}),
       },
-      questions: { ...QUESTIONS, profile: questionForProfiles(profiles) },
+      questions: { ...QUESTIONS, profile: questionForProfiles(profiles), requested_model: questionForModelRequest(profiles) },
     };
     let budget = routingStateBudget(original.questions);
     let result, request;
@@ -72,6 +73,7 @@ export async function askJev({ prompt, current, contextTokens, profiles, previou
       request,
       response: result,
       assessment: {
+        requestedModel: result.answers.requested_model ?? null,
         reasoningGain: result.answers.reasoning_gain ?? null,
         workStatus: result.answers.work_status ?? null,
       },

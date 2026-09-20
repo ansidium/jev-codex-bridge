@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decide, detectOverride } from "../src/policy.mjs";
-import { QUESTIONS, questionForProfiles } from "../src/config.mjs";
+import { decide } from "../src/policy.mjs";
+import { QUESTIONS, questionForProfiles, questionForModelRequest } from "../src/config.mjs";
 
 const current = { id: "small@deep", model: "small", tier: "haiku", effortIndex: 2,
   benchmark: { intelligence: 40, costPerTaskUSD: 0.4 },
@@ -23,6 +23,7 @@ test("score rubrics contain API-valid descriptions; pair choices contain measure
   const question = questionForProfiles(profiles);
   assert.deepEqual(Object.keys(question.criteria), profiles.map(profile => profile.id));
   assert.equal(question.criteria[current.id].benchmark.intelligence, 40);
+  assert.deepEqual(Object.keys(questionForModelRequest(profiles).criteria), ["automatic", "small", "large"]);
 });
 
 test("selects the complete pair, including a same-model effort change", () => {
@@ -70,16 +71,24 @@ test("unknown measurements do not invent cache savings or cap deeper same-model 
   assert.equal(decide({ ...base, current: unmeasured, contextTokens: 900000, jev: choice(weaker) }).profile, weaker);
 });
 
-test("explicit aliases retain the requested model family and Jev's supported effort", () => {
-  assert.equal(detectOverride("switch to astra"), "fable");
-  assert.equal(detectOverride("the opus of his career"), null);
-  const out = decide({ ...base, prompt: "use astra", jev: choice(weaker) });
-  assert.equal(out.profile, stronger);
+test("a semantic model request honors Jev's exact supported pair without phrase rules", () => {
+  const assessment = { requestedModel: { choice: "small", confidence: 0.99 } };
+  const out = decide({ ...base, contextTokens: 900000, jev: { ...choice(weaker, 0.1), assessment } });
+  assert.equal(out.profile, weaker);
   assert.equal(out.reason, "override");
-  assert.equal(detectOverride('Do not use astra. Correct the example string "use astra" in README.'), null);
-  assert.equal(detectOverride('Explain why the documentation says "use astra".'), null);
-  assert.equal(detectOverride("Please use Astra for this repair."), "fable");
-  assert.equal(detectOverride("Используй Astra для исправления."), "fable");
+  for (const requestedModel of [{ choice: "automatic", confidence: 0.99 },
+    { choice: "small", confidence: 0.1 }, { choice: "invented", confidence: 0.99 }]) {
+    assert.equal(decide({ ...base, prompt: "use astra", jev: {
+      ...choice(weaker, 0.1), assessment: { requestedModel },
+    } }).profile, current);
+  }
+  const mismatch = decide({ ...base, jev: { ...choice(stronger), assessment } });
+  assert.equal(mismatch.profile, current);
+  assert.match(mismatch.reason, /requested-model-mismatch/);
+  const continued = decide({ ...base, upgradeOnly: true, jev: { ...choice(weaker), assessment: {
+    ...assessment, workStatus: { choice: "reasoning_blocked", confidence: 0.99 },
+  } } });
+  assert.equal(continued.profile, current);
 });
 
 test("effort reductions account for cache rebuilding without blocking deeper reasoning", () => {

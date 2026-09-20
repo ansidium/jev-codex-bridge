@@ -1,19 +1,14 @@
-import { THRESHOLDS, OVERRIDE_PATTERNS } from "./config.mjs";
+import { THRESHOLDS } from "./config.mjs";
 
-export function detectOverride(prompt) {
-  return OVERRIDE_PATTERNS.find(pattern => pattern.re.test(prompt ?? ""))?.tier ?? null;
-}
-
-export function decide({ prompt, jev, current, profiles, contextTokens = 0, hasPriorModel = true, upgradeOnly = false }) {
+export function decide({ jev, current, profiles, contextTokens = 0, hasPriorModel = true, upgradeOnly = false }) {
   const settle = (profile, reason) => ({ profile,
     reason: profile.id === current.id ? `${reason}/no-change` : reason,
     changed: profile.id !== current.id });
   const chosen = profiles.find(profile => profile.id === jev?.choice);
-  const override = detectOverride(prompt);
-  if (override && !upgradeOnly) {
-    const matching = profiles.filter(profile => profile.tier === override);
-    if (matching.length) return settle(chosen?.tier === override ? chosen
-      : matching.find(profile => profile.id === current.id) ?? matching.at(-1), "override");
+  const requested = jev?.assessment?.requestedModel;
+  if (requested?.confidence >= THRESHOLDS.minConfidence && profiles.some(profile => profile.model === requested.choice)) {
+    if (chosen?.model !== requested.choice) return settle(current, "requested-model-mismatch");
+    if (!upgradeOnly) return settle(chosen, "override");
   }
   if (!chosen) return settle(current, "jev-unavailable");
 

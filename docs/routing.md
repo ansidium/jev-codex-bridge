@@ -52,6 +52,12 @@ The classifier does not receive the previously selected pair. This prevents the
 previous assignment from anchoring its recommendation. The bridge keeps that
 pair locally for fallback, downgrade checks and explanations.
 
+Explicit model requests are interpreted by Jev in the same call, using model IDs
+from the available catalog. There is no phrase dictionary or language-specific
+model-command parser. A confident explicit request takes precedence only when
+Jev's selected pair belongs to that model; disagreement preserves the current
+pair. Quoted examples and model mentions do not themselves force a selection.
+
 Pairs with no cheaper, strictly higher-scoring alternative are marked as being
 on the price-quality frontier. This is advisory: equal rounded scores do not
 prove equal capability, and specialized strengths may differ from the aggregate.

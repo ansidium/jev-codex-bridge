@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 import { availableTiers, THRESHOLDS, previousRoutingContext } from "./config.mjs";
 import { askJev } from "./router.mjs";
 import { codexRoutingContext, textForRouting as textOf } from "./routing-context.mjs";
-import { decide, detectOverride } from "./policy.mjs";
+import { decide } from "./policy.mjs";
 import { codexProfiles, fallbackProfile, frontierProfiles, PROFILE_DATA } from "./profiles.mjs";
 import { log } from "./log.mjs";
 import { codexStatusId, readStatus, writeDecision, writeStatus } from "./status.mjs";
@@ -236,14 +236,11 @@ export async function startCodexProxy({
             const routingPrompt = prompt ?? previous?.prompt;
             let selected = current;
             if ((prompt || checkpoint) && !explaining) {
-              const override = detectOverride(routingPrompt);
-              const requested = profiles.filter(profile => profile.tier === override);
-              const eligible = requested.length ? requested : profiles;
-              const frontier = new Set(frontierProfiles(eligible).map(profile => profile.id));
-              const options = eligible.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
+              const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
+              const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
               const jev = await route({ prompt: routingPrompt, current, contextTokens, profiles: options,
                 previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation: codexRoutingContext(body, undefined, routingPrompt) });
-              const decision = decide({ prompt: routingPrompt, jev, current, profiles: eligible, contextTokens,
+              const decision = decide({ jev, current, profiles, contextTokens,
                 hasPriorModel: Boolean(priorModel), upgradeOnly: Boolean(checkpoint) });
               selected = decision.profile;
               announce = !checkpoint || decision.changed;

@@ -13,6 +13,7 @@ const wrapped = (label, value) => {
 
 const decision = (reason = "") => {
   if (reason.includes("override")) return "prompt override";
+  if (reason.includes("requested-model-mismatch")) return "model selection disagrees; held";
   if (reason.includes("jev-unavailable")) return "Jev unavailable; held";
   if (reason.includes("low-confidence-no-downgrade")) return "low confidence; held";
   if (reason.includes("unknown-reasoning-no-downgrade")) return "insufficient task evidence; held";
@@ -52,6 +53,7 @@ export function formatExplanation(status) {
     row(`Context size        ${metric(m.contextSize)}`),
     ...(status.assessment?.reasoningGain ? wrapped("Reasoning value: ", status.assessment.reasoningGain.choice) : []),
     ...(status.assessment?.workStatus ? wrapped("Work status: ", status.assessment.workStatus.choice) : []),
+    ...(status.assessment?.requestedModel ? wrapped("Model request: ", status.assessment.requestedModel.choice) : []),
     ...(status.trigger === "tool-failures" ? [row("Trigger: new tool failures")] : []),
     row(),
     ...wrapped(`Recommended ${pair ? "pair" : answers?.model ? "model" : "tier"}: `, recommendation.toUpperCase()),
