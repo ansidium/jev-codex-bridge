@@ -99,6 +99,10 @@ including after a bridge restart. If no selection exists, it uses the normal
 catalog-based fallback.
 Compaction does not call the classifier or replace the task's routing decision.
 The bridge passes the compaction input and response through unchanged.
+The subsequent request retains the same selection when Codex's `turn_id` is
+unchanged, even if its last user-role message is now a compaction summary.
+Turn identity is saved with automatic and manual selections and restored after
+restarts. Clients without turn metadata use the existing message/tool boundary.
 
 OpenAI documents that persisted reasoning is reusable within a model family.
 GPT-5.6 Luna, Terra and Sol can reuse each other's reasoning; incompatible

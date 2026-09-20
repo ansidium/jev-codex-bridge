@@ -10,7 +10,7 @@ test("task context carries constraints, failed tools, summaries and media indica
     tools: [{ type: "function", name: "shell", description: "Tool schema" }],
     input: [
       { role: "user", content: "Preserve transaction invariants. " + "details ".repeat(2000) + "Keep rollback available." },
-      { role: "developer", content: "Repository constraint: never discard an unfinished transaction." },
+      { role: "user", content: "AGENTS.md: never discard an unfinished transaction." },
       { role: "assistant", content: [{ type: "output_text", text: "The first repair did not solve the race." }] },
       { type: "function_call", name: "shell", call_id: "test-1", arguments: "run recovery tests" },
       { type: "function_call_output", call_id: "test-1", output: "FAILED: committed data lost after restart" },
@@ -21,7 +21,7 @@ test("task context carries constraints, failed tools, summaries and media indica
     ],
   };
   const task = codexRoutingContext(body, "task");
-  for (const evidence of [body.input[0].content, "Repository constraint", "first repair", "test-1", "committed data lost", "Recovery ordering", "input_image", "Fix this too."]) {
+  for (const evidence of [body.input[0].content, "AGENTS.md", "first repair", "test-1", "committed data lost", "Recovery ordering", "input_image", "Fix this too."]) {
     assert(task.includes(evidence), evidence);
   }
   assert.doesNotMatch(task, /opaque-secret|synthetic-secret|injected environment|Global assistant|Extra schema|Tool schema/);
@@ -38,6 +38,26 @@ test("task context carries constraints, failed tools, summaries and media indica
   ] }, "task", "Continue");
   assert.equal((noDuplicate.match(/Continue/g) ?? []).length, 1);
   assert.match(noDuplicate, /Still failing/);
+});
+
+test("task context excludes system and developer scaffolding by role at any position", () => {
+  const input = [
+    { role: "system", content: "System instructions" },
+    { role: "developer", content: "Global Codex instructions and tool descriptions" },
+    { role: "user", content: "AGENTS.md: preserve the recovery log." },
+    { role: "user", content: "Diagnose the failed transaction." },
+    { type: "function_call_output", call_id: "read-rules", output: "Repository constraint: keep the public API stable." },
+    { role: "assistant", content: "The transaction is still unresolved." },
+    { role: "developer", content: "Reinjected skill catalog and app instructions" },
+    { role: "user", content: "Continue." },
+  ];
+  const body = { input };
+  const original = structuredClone(body);
+  const task = codexRoutingContext(body, "task", "Continue.").split("\n").map(JSON.parse);
+  assert.deepEqual(task.map(entry => entry.text ?? entry.output), input.slice(2, 6).map(item => item.content ?? item.output));
+  const full = codexRoutingContext(body, "full").split("\n").map(JSON.parse);
+  assert.deepEqual(full.map(entry => entry.text ?? entry.output), input.map(item => item.content ?? item.output));
+  assert.deepEqual(body, original);
 });
 
 test("window fitting preserves Unicode and both ends while keeping the current request", () => {
@@ -75,7 +95,7 @@ test("fitting retains interior failures, middle constraints and intact source re
   const body = { input: [
     { role: "user", content: "Repair crash recovery without data loss." },
     ...Array.from({ length: 80 }, (_, i) => ({ role: "assistant", content: `Routine result ${i}: ` + "ok ".repeat(500) })),
-    { role: "developer", content: "Never acknowledge writes before durability is established." },
+    { role: "user", content: "Never acknowledge writes before durability is established." },
     { type: "function_call", name: "recovery_tests", call_id: "middle-test", arguments: "check invariants" },
     { type: "function_call_output", call_id: "middle-test", output: log },
     { role: "user", content: "Continue the repair." },

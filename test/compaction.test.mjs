@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { startCodexProxy } from "../src/codex-proxy.mjs";
-import { readStatus, STATUS_DIR } from "../src/status.mjs";
+import { readStatus, writeStatus, STATUS_DIR } from "../src/status.mjs";
 
 test("native compaction preserves the selected model and routing state across restarts", async t => {
   const thread = randomUUID();
@@ -31,9 +31,9 @@ test("native compaction preserves the selected model and routing state across re
   await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
   t.after(() => upstream.close());
   const endpoint = `http://127.0.0.1:${upstream.address().port}`;
-  let routeCalls = 0;
+  const routeCalls = [];
   const options = { chatgptBaseURL: endpoint, apiBaseURL: endpoint,
-    route: async () => { routeCalls++; return { choice: "gpt-6-astra@low", confidence: 0.99 }; },
+    route: async args => { routeCalls.push(args); return { choice: "gpt-6-astra@low", confidence: 0.99 }; },
   };
   let proxy = await startCodexProxy(options);
   t.after(proxy.close);
@@ -50,12 +50,17 @@ test("native compaction preserves the selected model and routing state across re
     });
     return { status: response.status, text: await response.text() };
   };
-  await send("/responses", { model: "jev-router", input, reasoning: { effort: "high" } });
+  const turn = { request_kind: "turn", turn_id: randomUUID() };
+  await send("/responses", { model: "jev-router", input, reasoning: { effort: "high" } }, turn);
   assert.equal(seen.at(-1).body.model, "gpt-6-astra");
   const decision = readStatus(statusId);
   assert.equal(decision.reasoningEffort, "low");
   const body = { model: "jev-router", input, instructions: "Retain exact evidence", reasoning: { effort: "high" } };
-  const metadata = { request_kind: "compaction" };
+  const metadata = { ...turn, request_kind: "compaction" };
+  const resumed = { ...body, input: [input[0], { role: "user", content: "An arbitrary summary of the unfinished repair." }] };
+  await send("/responses", resumed, turn);
+  assert.equal(routeCalls.length, 1);
+  assert.deepEqual(readStatus(statusId), decision);
   for (const metadataInBody of [false, true]) {
     const payload = metadataInBody ? { ...body, client_metadata: { "x-codex-turn-metadata": JSON.stringify(metadata) } } : body;
     const result = await send("/responses?client_version=test", payload, metadataInBody ? null : metadata);
@@ -66,6 +71,15 @@ test("native compaction preserves the selected model and routing state across re
     proxy.close();
     proxy = await startCodexProxy(options);
     t.after(proxy.close);
+    const continuation = metadataInBody
+      ? { ...resumed, client_metadata: { "x-codex-turn-metadata": JSON.stringify(turn) } } : resumed;
+    await send("/responses", continuation, metadataInBody ? null : turn);
+    assert.equal(seen.at(-1).body.model, decision.model);
+    assert.equal(seen.at(-1).body.reasoning.effort, decision.reasoningEffort);
+    assert.deepEqual(seen.at(-1).body.input, resumed.input);
+    assert.equal(routeCalls.length, 1);
+    assert.equal(readStatus(statusId).turnId, turn.turn_id);
+    assert.deepEqual(readStatus(statusId), decision);
   }
   reject = true;
   assert.equal((await send("/responses", body, metadata)).status, 400);
@@ -75,12 +89,64 @@ test("native compaction preserves the selected model and routing state across re
     input: [...input, { type: "function_call_output", call_id: "1", output: "done" }] });
   assert.equal(seen.at(-1).body.model, "gpt-6-astra");
   assert.equal(seen.at(-1).body.reasoning.effort, "low");
-  assert.equal(routeCalls, 1);
+  assert.equal(routeCalls.length, 1);
   assert.deepEqual(readStatus(statusId), decision);
 
   await send("/responses", { ...body, model: "gpt-5.6-sol" }, metadata);
   assert.deepEqual(seen.at(-1).body, { ...body, model: "gpt-5.6-sol" });
   assert.deepEqual(readStatus(statusId), decision);
+
+  // A running turn can outlive installation of the bridge's turn-id tracking.
+  const legacy = { ...decision };
+  delete legacy.turnId;
+  writeStatus(statusId, legacy);
+  proxy.close();
+  proxy = await startCodexProxy(options);
+  t.after(proxy.close);
+  await send("/responses", resumed, { ...turn, turn_started_at_unix_ms: decision.at - 1 });
+  assert.equal(routeCalls.length, 1);
+  assert.deepEqual(readStatus(statusId), legacy);
+
+  // Reassessment still uses the original request after history is replaced.
+  await send("/responses", { ...resumed, input: [...resumed.input,
+    { type: "function_call_output", call_id: "failure-1", output: "FAILED: recovery invariant" },
+    { type: "function_call_output", call_id: "failure-2", output: "FAILED: recovery invariant" },
+  ] }, turn);
+  assert.equal(routeCalls.length, 2);
+  assert.equal(routeCalls.at(-1).prompt, input[1].content);
+  assert.equal(readStatus(statusId).trigger, "tool-failures");
+  assert.equal(readStatus(statusId).turnId, turn.turn_id);
+
+  // Identical text in a new user turn must be classified again.
+  const nextTurn = { ...turn, turn_id: randomUUID() };
+  await send("/responses", body, nextTurn);
+  assert.equal(routeCalls.length, 3);
+  assert.equal(readStatus(statusId).turnId, nextTurn.turn_id);
+  assert.equal(readStatus(statusId).trigger, "user");
+
+  // A manual selection establishes the same durable boundary as an automatic one.
+  const manualTurn = { ...turn, turn_id: randomUUID() };
+  await send("/responses", { ...body, model: "gpt-5.6-sol" }, manualTurn);
+  const manual = readStatus(statusId);
+  assert.equal(manual.turnId, manualTurn.turn_id);
+  assert.equal(manual.manual, true);
+  proxy.close();
+  proxy = await startCodexProxy(options);
+  t.after(proxy.close);
+  await send("/responses", resumed, manualTurn);
+  assert.equal(seen.at(-1).body.model, "gpt-5.6-sol");
+  assert.equal(routeCalls.length, 3);
+  assert.deepEqual(readStatus(statusId), manual);
+
+  const oldManual = { ...manual };
+  delete oldManual.turnId;
+  writeStatus(statusId, oldManual);
+  proxy.close();
+  proxy = await startCodexProxy(options);
+  t.after(proxy.close);
+  await send("/responses", body, { ...nextTurn, turn_started_at_unix_ms: manual.at + 1 });
+  assert.equal(routeCalls.length, 4);
+  assert.equal(readStatus(statusId).turnId, nextTurn.turn_id);
 });
 
 test("compaction before any routed turn resolves the alias without classifying or recording a turn", async t => {

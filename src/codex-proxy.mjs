@@ -208,6 +208,14 @@ export async function startCodexProxy({
           const isCompaction = metadata?.request_kind === "compaction";
           const isTurn = !metadata?.request_kind || metadata.request_kind === "turn";
           const key = codexConversationKey(body, req.headers);
+          // Compaction replaces input history without starting a new user turn.
+          // Persist the protocol identity so restarts do not classify its summary.
+          const previous = isTurn || isCompaction ? states.get(key) ?? (!statusId && readStatus(requestStatusId)) : null;
+          const turnId = metadata?.turn_id;
+          const sameTurn = turnId && (turnId === previous?.turnId ||
+            // Older status files have only the decision time, not the turn id.
+            (!previous?.turnId && metadata.turn_started_at_unix_ms > 0 && previous?.at >= metadata.turn_started_at_unix_ms));
+          const prompt = isTurn && !sameTurn ? codexNewTurnPrompt(body) : null;
           if (process.env.JEV_DUMP) {
             writeFileSync(`${process.env.JEV_DUMP}.${Date.now()}.json`, JSON.stringify(body, null, 2));
           }
@@ -226,10 +234,8 @@ export async function startCodexProxy({
             }
             // Restore Desktop's per-thread model after a service restart. Initial
             // instructions alone do not establish a previous model or its cache.
-            const previous = isTurn || isCompaction ? states.get(key) ?? (!statusId && readStatus(requestStatusId)) : null;
             const priorModel = profiles.some(profile => profile.model === previous?.model) ? previous.model : null;
             const current = fallbackProfile(profiles, priorModel ?? codexModelOf("opus"), previous?.reasoningEffort);
-            const prompt = isTurn ? codexNewTurnPrompt(body) : null;
             const explaining = prompt?.includes("<jev-explain>") || /^\$jev-explain\b/i.test(prompt ?? "");
             const checkpoint = isTurn && !prompt && priorModel && previous?.prompt
               ? codexFailureCheckpoint(body, previous.failureCheckpoint) : null;
@@ -246,6 +252,7 @@ export async function startCodexProxy({
               announce = !checkpoint || decision.changed;
               routing = {
                 prompt: routingPrompt,
+                turnId,
                 trigger: checkpoint ? "tool-failures" : "user",
                 failureCheckpoint: checkpoint ?? {},
                 previousModel: current.model,
@@ -269,17 +276,16 @@ export async function startCodexProxy({
               routing.reasoningEffort = body.reasoning?.effort;
               remember = () => {
                 states.set(key, { model: selected.model, prompt: routing.prompt,
-                  reasoningEffort: routing.reasoningEffort, failureCheckpoint: routing.failureCheckpoint });
+                  turnId: routing.turnId, reasoningEffort: routing.reasoningEffort, failureCheckpoint: routing.failureCheckpoint });
                 writeDecision(requestStatusId, routing);
               };
               debug(`${key} ${current.id} -> ${selected.id} (${routing.reason}) | ${routing.prompt.slice(0, 60)}`);
             }
           } else {
-            const prompt = isTurn ? codexNewTurnPrompt(body) : null;
             const explaining = prompt?.includes("<jev-explain>") || /^\$jev-explain\b/i.test(prompt ?? "");
             if (prompt && !explaining) {
               remember = () => {
-                const state = { model: body.model, prompt, reasoningEffort: body.reasoning?.effort };
+                const state = { model: body.model, prompt, turnId, reasoningEffort: body.reasoning?.effort };
                 states.set(key, state);
                 writeStatus(requestStatusId, { ...state, manual: true, at: Date.now() });
               };

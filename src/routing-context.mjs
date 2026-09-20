@@ -31,6 +31,9 @@ export function codexRoutingContext(body, mode = routingContextMode(), currentRe
     } else if (["function_call_output", "custom_tool_call_output"].includes(item.type)) {
       entries.push({ type: item.type, name: calls.get(item.call_id), call_id: item.call_id, output: textForRouting(item.output) });
     } else if (item.role || item.type === "reasoning") {
+      // Codex puts its runtime instructions in developer/system messages.
+      // Repository instructions arrive with user context or file/tool results.
+      if (mode === "task" && ["system", "developer"].includes(item.role)) continue;
       const text = textForRouting(item.content ?? item.summary)
         .replace(/<system[-_]reminder>[\s\S]*?<\/system[-_]reminder>/gi, "")
         .replace(/<current_datetime>[\s\S]*?<\/current_datetime>/gi, "")

@@ -96,8 +96,8 @@ can move to a different release without a bridge update.
 
 | Value | Data sent |
 | --- | --- |
-| `task` (default) | Current request, visible message history, repository constraints, reasoning summaries, tool calls and results |
-| `full` | The same history plus global Codex instructions and tool schemas |
+| `task` (default) | Current request, user and assistant history, repository constraints from user context and tool results, reasoning summaries, tool calls and results |
+| `full` | The same history plus system/developer instructions and tool schemas |
 | `previous` | Current and previous user requests without the message/tool history |
 
 The previous request is also supplied when it is missing from the received
@@ -105,6 +105,12 @@ history, including after a service restart. Image, audio and file content become
 a text indicator; Jev cannot inspect it. Encrypted reasoning, authentication
 headers and binary media are not sent. Environment-only injected messages are
 omitted. Task and sub-agent contexts remain isolated.
+
+Task mode excludes system/developer messages by role, including instructions
+reinjected after compaction. Codex supplies AGENTS.md in user context; those
+constraints and files read through tools are retained. Use `full` if a custom
+client supplies task-specific constraints in system/developer messages. This
+filter only affects Jev's evidence; the conversation sent to OpenAI is unchanged.
 
 There is no default character limit on a previous request. The optional
 `JEV_PREVIOUS_CONTEXT_CHARS` retains its explicit override (`0` or an integer of
