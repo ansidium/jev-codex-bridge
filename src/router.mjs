@@ -31,7 +31,7 @@ function getClient() {
  *
  * @returns {Promise<?{choice: string, confidence: number, probabilities: object, metrics: object, ms: number}>}
  */
-export async function askJev({ prompt, current, contextTokens, profiles, previousPrompt, conversation }) {
+export async function askJev({ prompt, current, contextTokens, profiles, previousPrompt, conversation, continuation = false }) {
   if (!profiles?.length) return null;
   const started = Date.now();
   const abort = new AbortController();
@@ -44,7 +44,7 @@ export async function askJev({ prompt, current, contextTokens, profiles, previou
     const original = {
       state: {
         request: prompt,
-        session: { approximate_context_tokens: contextTokens },
+        session: { approximate_context_tokens: contextTokens, continuation },
         environment: { available_profiles: profiles.map(profile => profile.id),
           evidence: { as_of: PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
             cost_unit: PROFILE_DATA.benchmark.costUnit, limitations: PROFILE_DATA.benchmark.limitations } },

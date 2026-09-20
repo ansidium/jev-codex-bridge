@@ -1,26 +1,27 @@
 import { THRESHOLDS } from "./config.mjs";
 
-export function decide({ jev, current, profiles, contextTokens = 0, hasPriorModel = true, upgradeOnly = false }) {
+export function decide({ jev, current, profiles, contextTokens = 0, hasPriorModel = true, continuation = false }) {
   const settle = (profile, reason) => ({ profile,
     reason: profile.id === current.id ? `${reason}/no-change` : reason,
     changed: profile.id !== current.id });
   const chosen = profiles.find(profile => profile.id === jev?.choice);
-  if (!chosen) return settle(current, "jev-unavailable");
+  if (!chosen || !Number.isFinite(jev.confidence) || jev.confidence < 0 || jev.confidence > 1) {
+    return settle(current, "jev-unavailable");
+  }
 
   const before = current.benchmark;
   const after = chosen.benchmark;
-  if (upgradeOnly) {
-    const progress = jev.assessment?.workStatus;
-    if (progress?.choice !== "reasoning_blocked" || progress.confidence < THRESHOLDS.minConfidence) {
-      return settle(current, "continuation-no-reasoning-blocker");
-    }
-    const upgrade = (before && after && after.intelligence > before.intelligence) ||
-      (chosen.model === current.model && chosen.effortIndex > current.effortIndex);
-    if (!upgrade) return settle(current, "continuation-no-upgrade");
-  }
   const downgrade = before && after ? after.intelligence < before.intelligence
     : chosen.model !== current.model || chosen.effortIndex < current.effortIndex;
   const lowerEffort = chosen.model === current.model && chosen.effortIndex < current.effortIndex;
+  if (continuation && (downgrade || lowerEffort)) {
+    const progress = jev.assessment?.workStatus;
+    const gain = jev.assessment?.reasoningGain;
+    if (!(progress?.choice === "complete" && progress.confidence >= THRESHOLDS.minConfidence &&
+          gain?.choice === "routine" && gain.confidence >= THRESHOLDS.minConfidence)) {
+      return settle(current, "continuation-work-not-complete");
+    }
+  }
   if ((downgrade || lowerEffort) && jev.assessment?.reasoningGain?.choice === "unknown") {
     return settle(current, "unknown-reasoning-no-downgrade");
   }

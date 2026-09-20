@@ -19,7 +19,7 @@ const decision = (reason = "") => {
   if (reason.includes("unknown-reasoning-no-downgrade")) return "insufficient task evidence; held";
   if (reason.includes("low-confidence-capped")) return "low confidence; capped";
   if (reason.includes("cache-rebuild")) return "cache cost estimate; held";
-  if (reason.includes("continuation-no-")) return "continuation; held";
+  if (reason.startsWith("continuation-")) return "unfinished work; held";
   if (reason.includes("unavailable")) return "nearest available tier";
   return "Jev recommendation";
 };
@@ -55,6 +55,7 @@ export function formatExplanation(status) {
     ...(status.assessment?.workStatus ? wrapped("Work status: ", status.assessment.workStatus.choice) : []),
     ...(status.assessment?.requestedModel ? wrapped("Model request: ", status.assessment.requestedModel.choice) : []),
     ...(status.trigger === "tool-failures" ? [row("Trigger: new tool failures")] : []),
+    ...(status.trigger === "context-change" ? [row("Trigger: changed task context")] : []),
     row(),
     ...wrapped(`Recommended ${pair ? "pair" : answers?.model ? "model" : "tier"}: `, recommendation.toUpperCase()),
     ...wrapped("Selected model: ", (status.model ?? status.tier ?? "unknown").toUpperCase()),

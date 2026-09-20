@@ -1,6 +1,7 @@
 # Routing evidence
 
-Jev selects one supported model-and-effort pair for each new user turn. The
+Jev selects one supported model-and-effort pair for each new user turn and
+reassesses when task evidence changes during a continuation. The
 selection instruction puts reliable completion first, then cost among capable
 choices. Catalog descriptions are omitted from the classification request.
 
@@ -76,18 +77,26 @@ subscription usage. It cannot force a downgrade.
 
 ## Continuing work
 
-Model and effort normally stay fixed through tool continuations. After two new
-failed tool results, the bridge asks Jev to reassess at the next request boundary.
-A change requires a sufficiently confident substantive reasoning blocker and a
-stronger measured pair or deeper effort on the same model. External blockers
-cannot trigger an upgrade, and continuations cannot trigger a downgrade. Checked
-failures are remembered across bridge restarts to avoid rechecking the same results.
+The bridge reassesses changed user messages and tool evidence at the next
+Responses request boundary. Successful tools can reveal a difficult problem,
+and a new instruction can change the work without a tool failure. There is no
+error-word parser or failure-count threshold. Identical evidence reuses the
+accepted decision, including after a restart. Cancellation before forwarding
+and rejected HTTP requests do not establish a decision; older responses cannot
+overwrite newer requests.
+
+During a continuation, reduced capability or same-model effort requires confident
+assessments that substantive work is complete and only routine work remains.
+The usual confidence, missing-evidence and cache checks still apply. Upgrades
+do not require waiting for a failed approach. This protects unfinished work
+without imposing a permanent model or effort floor. Reassessment adds a Jev
+call when evidence changes, subject to the existing routing deadline.
 
 For a new user message, the task history and recent results establish the scope
-of the current request and its necessary dependencies. Approval or an instruction
-to continue inherits the unfinished work. An information request includes the
-reasoning and verification needed to answer it, without automatically inheriting
-all earlier implementation work. A short correctness question can still be hard.
+of the remaining authorized work. Approval or an instruction to continue inherits
+unfinished work. An interruption also includes work that must resume after the
+reply. Explicit pauses, cancellations and new tasks change that scope; completed
+earlier work does not add difficulty. A short correctness question can still be hard.
 The previous request is a fallback when it is absent from the supplied history.
 
 The default task context leaves out global instructions and tool schemas. A
@@ -98,20 +107,24 @@ model-and-effort candidates; the context mode does not restrict Jev's choices.
 See [configuration](configuration.md#routing-context) for the input-window limits,
 fitting behavior and data sent to TypeSafe.
 
-Native context compaction uses the last eligible model and reasoning effort,
-including after a bridge restart. If no selection exists, it uses the normal
-catalog-based fallback.
+Native context compaction uses the last eligible model, including after a bridge
+restart. If no selection exists, it uses the normal catalog-based fallback.
 Compaction does not call the classifier or replace the task's routing decision.
-The bridge passes the compaction input and response through unchanged.
-The subsequent request retains the same selection when Codex's `turn_id` is
-unchanged, even if its last user-role message is now a compaction summary.
+This covers compaction metadata on `/responses` and the standalone
+`/responses/compact` endpoint. The former retains the selected reasoning effort;
+the latter does not receive an added reasoning parameter. The bridge preserves
+the compaction input and response, including opaque state, as required by the
+[compaction contract](https://developers.openai.com/api/docs/guides/compaction).
+Subsequent changed evidence can be reassessed. An unchanged `turn_id` identifies
+a continuation even if its last user-role message is now a compaction summary;
+the original request and continuation downgrade checks still apply.
 Turn identity is saved with automatic and manual selections and restored after
 restarts. Clients without turn metadata use the existing message/tool boundary.
 
 OpenAI documents that persisted reasoning is reusable within a model family.
 GPT-5.6 Luna, Terra and Sol can reuse each other's reasoning; incompatible
-reasoning is omitted across families. Visible conversation text still passes
-through the bridge. A family change does not exclude a candidate or block an
+reasoning is omitted by the API across families. The bridge preserves the full
+input, including encrypted items. A family change does not exclude a candidate or block an
 upgrade. Downgrade checks run after the classifier's recommendation.
 
 Changing effort can also affect caching. Astra supports `configuration_update`

@@ -53,14 +53,17 @@ test("native compaction preserves the selected model and routing state across re
   const turn = { request_kind: "turn", turn_id: randomUUID() };
   await send("/responses", { model: "jev-router", input, reasoning: { effort: "high" } }, turn);
   assert.equal(seen.at(-1).body.model, "gpt-6-astra");
-  const decision = readStatus(statusId);
+  let decision = readStatus(statusId);
   assert.equal(decision.reasoningEffort, "low");
   const body = { model: "jev-router", input, instructions: "Retain exact evidence", reasoning: { effort: "high" } };
   const metadata = { ...turn, request_kind: "compaction" };
   const resumed = { ...body, input: [input[0], { role: "user", content: "An arbitrary summary of the unfinished repair." }] };
   await send("/responses", resumed, turn);
-  assert.equal(routeCalls.length, 1);
-  assert.deepEqual(readStatus(statusId), decision);
+  assert.equal(routeCalls.length, 2);
+  assert.equal(routeCalls.at(-1).continuation, true);
+  assert.equal(routeCalls.at(-1).prompt, input[1].content);
+  assert.equal(readStatus(statusId).profile, decision.profile);
+  decision = readStatus(statusId);
   for (const metadataInBody of [false, true]) {
     const payload = metadataInBody ? { ...body, client_metadata: { "x-codex-turn-metadata": JSON.stringify(metadata) } } : body;
     const result = await send("/responses?client_version=test", payload, metadataInBody ? null : metadata);
@@ -77,7 +80,7 @@ test("native compaction preserves the selected model and routing state across re
     assert.equal(seen.at(-1).body.model, decision.model);
     assert.equal(seen.at(-1).body.reasoning.effort, decision.reasoningEffort);
     assert.deepEqual(seen.at(-1).body.input, resumed.input);
-    assert.equal(routeCalls.length, 1);
+    assert.equal(routeCalls.length, 2);
     assert.equal(readStatus(statusId).turnId, turn.turn_id);
     assert.deepEqual(readStatus(statusId), decision);
   }
@@ -85,12 +88,21 @@ test("native compaction preserves the selected model and routing state across re
   assert.equal((await send("/responses", body, metadata)).status, 400);
   assert.deepEqual(readStatus(statusId), decision);
   reject = false;
+  for (const compactInput of [input, "Preserve this context."]) {
+    const payload = { model: "jev-router", input: compactInput, instructions: "Retain exact evidence" };
+    const result = await send("/responses/compact?client_version=test", payload, null);
+    assert.deepEqual(result, { status: 200, text: compacted });
+    assert.deepEqual(seen.at(-1).body, { ...payload, model: decision.model });
+    assert.deepEqual(readStatus(statusId), decision);
+    assert.equal(routeCalls.length, 2);
+  }
   await send("/responses", { model: "jev-router", reasoning: { effort: "high" },
     input: [...input, { type: "function_call_output", call_id: "1", output: "done" }] });
   assert.equal(seen.at(-1).body.model, "gpt-6-astra");
   assert.equal(seen.at(-1).body.reasoning.effort, "low");
-  assert.equal(routeCalls.length, 1);
-  assert.deepEqual(readStatus(statusId), decision);
+  assert.equal(routeCalls.length, 3);
+  assert.equal(readStatus(statusId).profile, decision.profile);
+  decision = readStatus(statusId);
 
   await send("/responses", { ...body, model: "gpt-5.6-sol" }, metadata);
   assert.deepEqual(seen.at(-1).body, { ...body, model: "gpt-5.6-sol" });
@@ -104,23 +116,24 @@ test("native compaction preserves the selected model and routing state across re
   proxy = await startCodexProxy(options);
   t.after(proxy.close);
   await send("/responses", resumed, { ...turn, turn_started_at_unix_ms: decision.at - 1 });
-  assert.equal(routeCalls.length, 1);
-  assert.deepEqual(readStatus(statusId), legacy);
+  assert.equal(routeCalls.length, 4);
+  assert.equal(routeCalls.at(-1).continuation, true);
+  assert.equal(readStatus(statusId).profile, legacy.profile);
 
   // Reassessment still uses the original request after history is replaced.
   await send("/responses", { ...resumed, input: [...resumed.input,
     { type: "function_call_output", call_id: "failure-1", output: "FAILED: recovery invariant" },
     { type: "function_call_output", call_id: "failure-2", output: "FAILED: recovery invariant" },
   ] }, turn);
-  assert.equal(routeCalls.length, 2);
+  assert.equal(routeCalls.length, 5);
   assert.equal(routeCalls.at(-1).prompt, input[1].content);
-  assert.equal(readStatus(statusId).trigger, "tool-failures");
+  assert.equal(readStatus(statusId).trigger, "context-change");
   assert.equal(readStatus(statusId).turnId, turn.turn_id);
 
   // Identical text in a new user turn must be classified again.
   const nextTurn = { ...turn, turn_id: randomUUID() };
   await send("/responses", body, nextTurn);
-  assert.equal(routeCalls.length, 3);
+  assert.equal(routeCalls.length, 6);
   assert.equal(readStatus(statusId).turnId, nextTurn.turn_id);
   assert.equal(readStatus(statusId).trigger, "user");
 
@@ -134,9 +147,10 @@ test("native compaction preserves the selected model and routing state across re
   proxy = await startCodexProxy(options);
   t.after(proxy.close);
   await send("/responses", resumed, manualTurn);
-  assert.equal(seen.at(-1).body.model, "gpt-5.6-sol");
-  assert.equal(routeCalls.length, 3);
-  assert.deepEqual(readStatus(statusId), manual);
+  assert.equal(routeCalls.length, 7);
+  assert.equal(routeCalls.at(-1).continuation, true);
+  assert.equal(readStatus(statusId).turnId, manualTurn.turn_id);
+  assert.equal(seen.at(-1).body.model, "gpt-6-astra");
 
   const oldManual = { ...manual };
   delete oldManual.turnId;
@@ -145,7 +159,7 @@ test("native compaction preserves the selected model and routing state across re
   proxy = await startCodexProxy(options);
   t.after(proxy.close);
   await send("/responses", body, { ...nextTurn, turn_started_at_unix_ms: manual.at + 1 });
-  assert.equal(routeCalls.length, 4);
+  assert.equal(routeCalls.length, 8);
   assert.equal(readStatus(statusId).turnId, nextTurn.turn_id);
 });
 
@@ -165,14 +179,16 @@ test("compaction before any routed turn resolves the alias without classifying o
   const proxy = await startCodexProxy({ chatgptBaseURL: endpoint, apiBaseURL: endpoint,
     route: async () => { routeCalls++; return null; } });
   t.after(proxy.close);
-  const response = await fetch(`http://127.0.0.1:${proxy.port}/responses`, {
-    method: "POST", headers: { "content-type": "application/json", "thread-id": thread,
-      "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction" }) },
-    body: JSON.stringify({ model: "jev-router", input: [] }),
-  });
-  assert.equal(response.status, 200);
-  assert.equal(await response.text(), "{}");
-  assert.equal(model, "gpt-catalog-model");
-  assert.equal(routeCalls, 0);
-  assert.equal(readStatus(`codex-thread-${thread}`), null);
+  for (const path of ["/responses", "/responses/compact"]) {
+    const response = await fetch(`http://127.0.0.1:${proxy.port}${path}`, {
+      method: "POST", headers: { "content-type": "application/json", "thread-id": thread,
+        ...(path === "/responses" ? { "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction" }) } : {}) },
+      body: JSON.stringify({ model: "jev-router", input: [] }),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "{}");
+    assert.equal(model, "gpt-catalog-model");
+    assert.equal(routeCalls, 0);
+    assert.equal(readStatus(`codex-thread-${thread}`), null);
+  }
 });

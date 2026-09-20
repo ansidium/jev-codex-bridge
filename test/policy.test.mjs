@@ -48,7 +48,8 @@ test("capability is compared by measurements, not model tier order", () => {
 });
 
 test("failure and an invented profile preserve the current pair", () => {
-  for (const jev of [null, { choice: "unknown@max", confidence: 1 }]) {
+  for (const jev of [null, { choice: "unknown@max", confidence: 1 },
+    ...[undefined, NaN, Infinity, -1, 1.1].map(confidence => ({ choice: weaker.id, confidence }))]) {
     const out = decide({ ...base, jev });
     assert.equal(out.profile, current);
     assert.equal(out.changed, false);
@@ -78,7 +79,7 @@ test("model names in classifier output cannot bypass policy or veto the selected
   const mismatch = decide({ ...base, jev: { ...choice(stronger), assessment } });
   assert.equal(mismatch.profile, stronger);
   assert.equal(mismatch.reason, "jev");
-  const continued = decide({ ...base, upgradeOnly: true, jev: { ...choice(weaker), assessment: {
+  const continued = decide({ ...base, continuation: true, jev: { ...choice(weaker), assessment: {
     ...assessment, workStatus: { choice: "reasoning_blocked", confidence: 0.99 },
   } } });
   assert.equal(continued.profile, current);
@@ -100,15 +101,22 @@ test("effort reductions account for cache rebuilding without blocking deeper rea
   assert.equal(decide({ ...params, profiles: [deep, tied], jev: choice(tied, 0.1), contextTokens: 0 }).profile, deep);
 });
 
-test("tool checkpoints only upgrade after Jev identifies a reasoning blocker", () => {
-  const blocked = { workStatus: { choice: "reasoning_blocked", confidence: 0.9 } };
-  const params = { ...base, upgradeOnly: true };
-  assert.equal(decide({ ...params, jev: { ...choice(stronger, 0.2), assessment: blocked } }).profile, stronger);
-  assert.equal(decide({ ...params, jev: { ...choice(weaker), assessment: blocked } }).profile, current);
+test("continuations can upgrade before failures, and lower only after difficult work is complete", () => {
+  const params = { ...base, continuation: true };
+  assert.equal(decide({ ...params, jev: choice(stronger, 0.2) }).profile, stronger);
   for (const assessment of [undefined, { workStatus: { choice: "external_blocked", confidence: 0.99 } },
-    { workStatus: { choice: "reasoning_blocked", confidence: 0.1 } }]) {
-    assert.equal(decide({ ...params, jev: { ...choice(stronger), assessment } }).profile, current);
+    { workStatus: { choice: "advancing", confidence: 0.99 }, reasoningGain: { choice: "routine", confidence: 0.99 } },
+    { workStatus: { choice: "complete", confidence: 0.99 }, reasoningGain: { choice: "deep", confidence: 0.99 } },
+    { workStatus: { choice: "complete", confidence: 0.1 }, reasoningGain: { choice: "routine", confidence: 0.99 } }]) {
+    assert.equal(decide({ ...params, jev: { ...choice(weaker), assessment } }).profile, current);
   }
+  const assessment = { workStatus: { choice: "complete", confidence: 0.99 }, reasoningGain: { choice: "routine", confidence: 0.99 } };
+  assert.equal(decide({ ...params, jev: { ...choice(weaker), assessment } }).profile, weaker);
+  assert.equal(decide({ ...params, jev: { ...choice(weaker, 0.1), assessment } }).profile, current);
+  const expensive = { ...current, rates: { cachedInput: 0, cacheWrite: 5 } };
+  const light = { ...weaker, rates: expensive.rates };
+  assert.equal(decide({ ...params, current: expensive, profiles: [expensive, light], contextTokens: 1000000,
+    jev: { ...choice(light), assessment } }).profile, expensive);
 });
 
 test("unknown task evidence cannot justify a downgrade, including a fresh task", () => {

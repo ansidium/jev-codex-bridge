@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { availableTiers, THRESHOLDS, previousRoutingContext } from "./config.mjs";
 import { askJev } from "./router.mjs";
-import { codexRoutingContext, textForRouting as textOf } from "./routing-context.mjs";
+import { codexInputItems, codexRoutingContext, textForRouting as textOf } from "./routing-context.mjs";
 import { decide } from "./policy.mjs";
 import { codexProfiles, fallbackProfile, frontierProfiles, PROFILE_DATA } from "./profiles.mjs";
 import { log } from "./log.mjs";
@@ -62,10 +62,10 @@ export const isCodexAuxiliaryPrompt = (prompt) =>
   /^Generate a concise, single-line task title\b/i.test(prompt);
 
 /** User text that starts a new Codex turn, or null for tool continuations. */
-export function codexNewTurnPrompt(body) {
-  if (!Array.isArray(body?.input)) return null;
-  if (!body.input.some((item) => item?.type === "additional_tools")) return null;
-  for (const item of [...body.input].reverse()) {
+export function codexNewTurnPrompt(body, explicitTurn = false) {
+  const input = codexInputItems(body);
+  if (!explicitTurn && typeof body?.input !== "string" && !input.some((item) => item?.type === "additional_tools")) return null;
+  for (const item of [...input].reverse()) {
     if (item?.type === "function_call_output" || item?.type === "custom_tool_call_output") return null;
     if (item?.role !== "user") continue;
     const prompt = cleanPrompt(textOf(item.content));
@@ -74,32 +74,25 @@ export function codexNewTurnPrompt(body) {
   return null;
 }
 
+const turnMetadata = (body, headers) => {
+  try { return JSON.parse(headers["x-codex-turn-metadata"] ?? body?.client_metadata?.["x-codex-turn-metadata"] ?? "{}"); }
+  catch { return {}; }
+};
+
 export function codexConversationKey(body, headers = {}) {
+  const metadata = turnMetadata(body, headers);
   const stable =
     headers["thread-id"] ?? body?.client_metadata?.thread_id ??
+    metadata?.thread_id ?? metadata?.session_id ??
     body?.prompt_cache_key ??
-    body?.client_metadata?.["x-codex-turn-metadata"] ??
-    `${body?.instructions ?? ""}|${textOf(body?.input?.find((item) => item?.role === "user")?.content)}`;
+    `${body?.instructions ?? ""}|${textOf(codexInputItems(body).find((item) => item?.role === "user")?.content)}`;
   return createHash("sha1").update(String(stable)).digest("hex").slice(0, 12);
 }
 
 export function codexPreviousUserPrompt(body) {
-  return previousRoutingContext(body?.input?.filter(item => item?.role === "user")
+  return previousRoutingContext(codexInputItems(body).filter(item => item?.role === "user")
     .map(item => cleanPrompt(textOf(item.content)))
     .filter(prompt => prompt && !isCodexAuxiliaryPrompt(prompt)).at(-2));
-}
-
-/** Two new failed tool results warrant a semantic check, never an automatic upgrade. */
-export function codexFailureCheckpoint(body, checked = {}) {
-  const input = body.input ?? [];
-  const start = input.findLastIndex(item => item.role === "user" && cleanPrompt(textOf(item.content)));
-  const results = input.slice(start + 1).filter(item => ["function_call_output", "custom_tool_call_output"].includes(item.type));
-  const failed = item => /\b(?:FAILED|FAILURE|AssertionError|panic|Traceback)\b|\berror(?:\s+[A-Z]+\d+|:)|ошибк|сбой/iu.test(textOf(item?.output));
-  if (!failed(results.at(-1))) return null;
-  const ids = [...new Set(results.filter(failed).map(item => item.call_id ??
-    createHash("sha1").update(textOf(item.output)).digest("hex")))];
-  const checkedCount = ids.includes(checked.callId) ? checked.count : 0;
-  return ids.length >= checkedCount + 2 ? { count: ids.length, callId: ids.at(-1) } : null;
 }
 
 export function addJevModel(catalog) {
@@ -164,6 +157,7 @@ export async function startCodexProxy({
   authorize = () => true,
 } = {}) {
   const states = new Map();
+  const revisions = new Map();
   const models = new Map();
   let catalogRequest;
   const rememberCatalog = catalog => {
@@ -197,25 +191,30 @@ export async function startCodexProxy({
       let routing;
       let remember;
       let announce = true;
-      if (req.method === "POST" && /\/responses(?:\?|$)/.test(req.url ?? "")) {
+      const compactEndpoint = /\/responses\/compact(?:\?|$)/.test(req.url ?? "");
+      if (req.method === "POST" && (compactEndpoint || /\/responses(?:\?|$)/.test(req.url ?? ""))) {
         try {
           const body = JSON.parse(out.toString());
+          const metadata = turnMetadata(body, req.headers);
+          const latestUser = codexInputItems(body).findLast(item => item.role === "user" && cleanPrompt(textOf(item.content)));
+          const latestPrompt = cleanPrompt(textOf(latestUser?.content));
           const requestStatusId = statusId || codexStatusId(
-            req.headers["thread-id"] ?? body.client_metadata?.thread_id ?? body.prompt_cache_key,
+            req.headers["thread-id"] ?? body.client_metadata?.thread_id ?? metadata?.thread_id ?? metadata?.session_id ?? body.prompt_cache_key,
           );
-          let metadata = {};
-          try { metadata = JSON.parse(req.headers["x-codex-turn-metadata"] ?? body.client_metadata?.["x-codex-turn-metadata"] ?? "{}"); } catch {}
-          const isCompaction = metadata?.request_kind === "compaction";
-          const isTurn = !metadata?.request_kind || metadata.request_kind === "turn";
+          const isCompaction = compactEndpoint || metadata?.request_kind === "compaction";
+          const isTurn = !isCompaction && (!metadata?.request_kind || metadata.request_kind === "turn") && !isCodexAuxiliaryPrompt(latestPrompt);
           const key = codexConversationKey(body, req.headers);
-          // Compaction replaces input history without starting a new user turn.
-          // Persist the protocol identity so restarts do not classify its summary.
-          const previous = isTurn || isCompaction ? states.get(key) ?? (!statusId && readStatus(requestStatusId)) : null;
+          const saved = readStatus(requestStatusId);
+          const previous = isTurn || isCompaction ? states.get(key) ??
+            ((!statusId || saved?.conversationKey === key) ? saved : null) : null;
+          // An older response must not overwrite a newer request's decision.
+          const revision = (revisions.get(key) ?? 0) + 1;
+          if (isTurn) revisions.set(key, revision);
           const turnId = metadata?.turn_id;
           const sameTurn = turnId && (turnId === previous?.turnId ||
             // Older status files have only the decision time, not the turn id.
             (!previous?.turnId && metadata.turn_started_at_unix_ms > 0 && previous?.at >= metadata.turn_started_at_unix_ms));
-          const prompt = isTurn && !sameTurn ? codexNewTurnPrompt(body) : null;
+          const prompt = isTurn && !sameTurn ? codexNewTurnPrompt(body, metadata?.request_kind === "turn") : null;
           if (process.env.JEV_DUMP) {
             writeFileSync(`${process.env.JEV_DUMP}.${Date.now()}.json`, JSON.stringify(body, null, 2));
           }
@@ -225,7 +224,7 @@ export async function startCodexProxy({
             const candidates = codexModels(models, responsesLite).filter((model) =>
               model.tier !== "fable" || availableTiers().includes("fable"),
             );
-            const contextTokens = Math.round(JSON.stringify(body.input).length / 4);
+            const contextTokens = Math.round(JSON.stringify(body.input ?? []).length / 4);
             const profiles = codexProfiles(candidates, models, body.reasoning?.effort, contextTokens);
             if (!profiles.length) {
               res.writeHead(503, { "content-type": "application/json" });
@@ -236,25 +235,29 @@ export async function startCodexProxy({
             // instructions alone do not establish a previous model or its cache.
             const priorModel = profiles.some(profile => profile.model === previous?.model) ? previous.model : null;
             const current = fallbackProfile(profiles, priorModel ?? codexModelOf("opus"), previous?.reasoningEffort);
-            const explaining = prompt?.includes("<jev-explain>") || /^\$jev-explain\b/i.test(prompt ?? "");
-            const checkpoint = isTurn && !prompt && priorModel && previous?.prompt
-              ? codexFailureCheckpoint(body, previous.failureCheckpoint) : null;
+            const explaining = latestPrompt.includes("<jev-explain>") || /^\$jev-explain\b/i.test(latestPrompt);
+            const continuation = Boolean(previous && (sameTurn || !prompt));
             const routingPrompt = prompt ?? previous?.prompt;
+            const conversation = codexRoutingContext(body, undefined, routingPrompt);
+            const evidenceHash = createHash("sha256").update(JSON.stringify({ prompt: routingPrompt, conversation,
+              effort: body.reasoning?.effort, profiles: profiles.map(profile => profile.id) })).digest("hex");
+            const changed = evidenceHash !== previous?.evidenceHash || (turnId && !sameTurn);
             let selected = current;
-            if ((prompt || checkpoint) && !explaining) {
+            if (isTurn && routingPrompt && changed && !explaining) {
               const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
               const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
               const jev = await route({ prompt: routingPrompt, current, contextTokens, profiles: options,
-                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation: codexRoutingContext(body, undefined, routingPrompt) });
+                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation });
               const decision = decide({ jev, current, profiles, contextTokens,
-                hasPriorModel: Boolean(priorModel), upgradeOnly: Boolean(checkpoint) });
+                hasPriorModel: Boolean(priorModel), continuation });
               selected = decision.profile;
-              announce = !checkpoint || decision.changed;
+              announce = !continuation || decision.changed;
               routing = {
                 prompt: routingPrompt,
                 turnId,
-                trigger: checkpoint ? "tool-failures" : "user",
-                failureCheckpoint: checkpoint ?? {},
+                conversationKey: key,
+                evidenceHash,
+                trigger: continuation ? "context-change" : "user",
                 previousModel: current.model,
                 previousReasoningEffort: current.effort,
                 tier: selected.tier,
@@ -271,21 +274,23 @@ export async function startCodexProxy({
               };
             }
             body.model = selected.model;
-            if (selected.effort) body.reasoning = { ...body.reasoning, effort: selected.effort };
+            if (!compactEndpoint && selected.effort) body.reasoning = { ...body.reasoning, effort: selected.effort };
             if (routing) {
               routing.reasoningEffort = body.reasoning?.effort;
               remember = () => {
+                if (res.destroyed || revisions.get(key) !== revision) return;
                 states.set(key, { model: selected.model, prompt: routing.prompt,
-                  turnId: routing.turnId, reasoningEffort: routing.reasoningEffort, failureCheckpoint: routing.failureCheckpoint });
+                  turnId: routing.turnId, reasoningEffort: routing.reasoningEffort, evidenceHash });
                 writeDecision(requestStatusId, routing);
               };
               debug(`${key} ${current.id} -> ${selected.id} (${routing.reason}) | ${routing.prompt.slice(0, 60)}`);
             }
           } else {
-            const explaining = prompt?.includes("<jev-explain>") || /^\$jev-explain\b/i.test(prompt ?? "");
-            if (prompt && !explaining) {
+            const explaining = latestPrompt.includes("<jev-explain>") || /^\$jev-explain\b/i.test(latestPrompt);
+            if (isTurn && latestPrompt && !explaining) {
               remember = () => {
-                const state = { model: body.model, prompt, turnId, reasoningEffort: body.reasoning?.effort };
+                if (res.destroyed || revisions.get(key) !== revision) return;
+                const state = { model: body.model, prompt: latestPrompt, turnId, conversationKey: key, reasoningEffort: body.reasoning?.effort };
                 states.set(key, state);
                 writeStatus(requestStatusId, { ...state, manual: true, at: Date.now() });
               };

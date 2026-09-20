@@ -87,8 +87,8 @@ test("Desktop explanation isolates chats and preserves the last decision during 
   await send(threadA, "background summary", "gpt-5.6-luna", { kind: "summary" });
   await send(threadA, "alpha chat decision", "jev-router", { tool: true });
   await send(threadA, "$jev-explain");
-  assert.equal(routeCalls, 2);
-  assert.equal(readStatus(statusA).history.length, 1);
+  assert.equal(routeCalls, 3);
+  assert.equal(readStatus(statusA).history.length, 2);
   assert.match(explainCommand(threadA), /Prompt: alpha chat decision/);
   await send(threadA, "alpha follow-up");
   assert.equal(previousPrompts.at(-1), "alpha chat decision");
@@ -172,7 +172,7 @@ test("large fresh Desktop chats can start cheap and restore their model after re
   assert.equal(catalogFetches, 2);
   assert.equal(seen.at(-1).model, "gpt-5.6-luna");
   assert.equal(seen.at(-1).reasoning.effort, "low");
-  assert.equal(routeCalls, 1);
+  assert.equal(routeCalls, 2);
   await send(restored.port, "hard");
   assert.equal(seen.at(-1).model, "gpt-5.6-sol");
   await send(restored.port, "simple");

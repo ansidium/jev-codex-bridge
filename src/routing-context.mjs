@@ -16,14 +16,18 @@ export const textForRouting = value => {
   }).filter(Boolean).join("\n");
 };
 
+export const codexInputItems = body => typeof body?.input === "string"
+  ? [{ role: "user", content: body.input }] : body?.input ?? [];
+
 /** Keep the visible task and tool evidence in order, without binary or encrypted data. */
 export function codexRoutingContext(body, mode = routingContextMode(), currentRequest) {
   if (mode === "previous") return "";
   const entries = [];
-  const calls = new Map((body.input ?? []).filter(item => item.call_id && item.name).map(item => [item.call_id, item.name]));
+  const input = codexInputItems(body);
+  const calls = new Map(input.filter(item => item.call_id && item.name).map(item => [item.call_id, item.name]));
   if (mode === "full" && body.instructions) entries.push({ role: "system", text: body.instructions });
   if (mode === "full" && body.tools?.length) entries.push({ type: "available_tools", tools: body.tools });
-  for (const item of body.input ?? []) {
+  for (const item of input) {
     if (item.type === "additional_tools") {
       if (mode === "full") entries.push({ type: item.type, tools: item.tools });
     } else if (["function_call", "custom_tool_call"].includes(item.type)) {

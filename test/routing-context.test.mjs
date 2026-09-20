@@ -172,7 +172,7 @@ test("Jev size rejections retry with more compact evidence; other validation fai
     const neutral = { ...args, profiles: [current, other], conversation: "The crash recovery failure is unresolved." };
     await askJev(neutral);
     const first = seen.at(-1);
-    assert.deepEqual(first.state.session, { approximate_context_tokens: 50000 });
+    assert.deepEqual(first.state.session, { approximate_context_tokens: 50000, continuation: false });
     await askJev({ ...neutral, current: other });
     assert.deepEqual(seen.at(-1), first);
   });
