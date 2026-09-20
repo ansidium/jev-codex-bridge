@@ -99,6 +99,14 @@ reply. Explicit pauses, cancellations and new tasks change that scope; completed
 earlier work does not add difficulty. A short correctness question can still be hard.
 The previous request is a fallback when it is absent from the supplied history.
 
+Pair selection and the remaining-work assessments share the same scope rule.
+On a new turn, the current request supersedes conflicting earlier instructions.
+During a continuation, later user messages and actual outcomes update the scope
+of the opening request. Relevant facts and constraints stay in the evidence;
+paused, cancelled or replaced work does not contribute its old difficulty.
+This does not relax confidence or cache checks or assign models to particular
+phrases.
+
 The default task context leaves out global instructions and tool schemas. A
 `full` mode includes those fields for comparisons. TypeSafe documents that
 [irrelevant detail can reduce accuracy](https://docs.typesafe.ai/model-jaggedness/jev-1.13),
