@@ -17,6 +17,7 @@ let client;
 function getClient() {
   client ??= new TypeSafeClient({
     apiKey: process.env.JEV_API_KEY ?? process.env.TYPESAFE_API_KEY,
+    defaultModel: process.env.TYPESAFE_DEFAULT_MODEL || "jev-1.13.0",
     timeout: THRESHOLDS.jevTimeoutMs,
     retry: { maxRetries: THRESHOLDS.jevMaxRetries, backoffInitialMs: 150, backoffMaxMs: 400 },
     logLevel: "warn", // never "debug": request bodies contain the user's prompt
@@ -70,6 +71,10 @@ export async function askJev({ prompt, current, contextTokens, profiles, previou
       ...answer,
       request,
       response: result,
+      assessment: {
+        reasoningGain: result.answers.reasoning_gain ?? null,
+        workStatus: result.answers.work_status ?? null,
+      },
       metrics: {
         taskComplexity: task_complexity.score / COMPLEXITY_MAX_SCORE,
         reasoningRequired: reasoning_required.score / COMPLEXITY_MAX_SCORE,

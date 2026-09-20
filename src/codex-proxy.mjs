@@ -89,6 +89,19 @@ export function codexPreviousUserPrompt(body) {
     .filter(prompt => prompt && !isCodexAuxiliaryPrompt(prompt)).at(-2));
 }
 
+/** Two new failed tool results warrant a semantic check, never an automatic upgrade. */
+export function codexFailureCheckpoint(body, checked = {}) {
+  const input = body.input ?? [];
+  const start = input.findLastIndex(item => item.role === "user" && cleanPrompt(textOf(item.content)));
+  const results = input.slice(start + 1).filter(item => ["function_call_output", "custom_tool_call_output"].includes(item.type));
+  const failed = item => /\b(?:FAILED|FAILURE|AssertionError|panic|Traceback)\b|\berror(?:\s+[A-Z]+\d+|:)|ошибк|сбой/iu.test(textOf(item?.output));
+  if (!failed(results.at(-1))) return null;
+  const ids = [...new Set(results.filter(failed).map(item => item.call_id ??
+    createHash("sha1").update(textOf(item.output)).digest("hex")))];
+  const checkedCount = ids.includes(checked.callId) ? checked.count : 0;
+  return ids.length >= checkedCount + 2 ? { count: ids.length, callId: ids.at(-1) } : null;
+}
+
 export function addJevModel(catalog) {
   if (!Array.isArray(catalog?.models) || catalog.models.some((model) => model.slug === CODEX_AUTO_MODEL)) {
     return catalog;
@@ -183,6 +196,7 @@ export async function startCodexProxy({
       let out = Buffer.concat(chunks);
       let routing;
       let remember;
+      let announce = true;
       if (req.method === "POST" && /\/responses(?:\?|$)/.test(req.url ?? "")) {
         try {
           const body = JSON.parse(out.toString());
@@ -217,19 +231,26 @@ export async function startCodexProxy({
             const current = fallbackProfile(profiles, priorModel ?? codexModelOf("opus"), previous?.reasoningEffort);
             const prompt = isTurn ? codexNewTurnPrompt(body) : null;
             const explaining = prompt?.includes("<jev-explain>") || /^\$jev-explain\b/i.test(prompt ?? "");
+            const checkpoint = isTurn && !prompt && priorModel && previous?.prompt
+              ? codexFailureCheckpoint(body, previous.failureCheckpoint) : null;
+            const routingPrompt = prompt ?? previous?.prompt;
             let selected = current;
-            if (prompt && !explaining) {
-              const override = detectOverride(prompt);
+            if ((prompt || checkpoint) && !explaining) {
+              const override = detectOverride(routingPrompt);
               const requested = profiles.filter(profile => profile.tier === override);
               const eligible = requested.length ? requested : profiles;
               const frontier = new Set(frontierProfiles(eligible).map(profile => profile.id));
               const options = eligible.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
-              const jev = await route({ prompt, current, contextTokens, profiles: options,
-                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation: codexRoutingContext(body, undefined, prompt) });
-              const decision = decide({ prompt, jev, current, profiles: eligible, contextTokens, hasPriorModel: Boolean(priorModel) });
+              const jev = await route({ prompt: routingPrompt, current, contextTokens, profiles: options,
+                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation: codexRoutingContext(body, undefined, routingPrompt) });
+              const decision = decide({ prompt: routingPrompt, jev, current, profiles: eligible, contextTokens,
+                hasPriorModel: Boolean(priorModel), upgradeOnly: Boolean(checkpoint) });
               selected = decision.profile;
+              announce = !checkpoint || decision.changed;
               routing = {
-                prompt,
+                prompt: routingPrompt,
+                trigger: checkpoint ? "tool-failures" : "user",
+                failureCheckpoint: checkpoint ?? {},
                 previousModel: current.model,
                 previousReasoningEffort: current.effort,
                 tier: selected.tier,
@@ -239,6 +260,7 @@ export async function startCodexProxy({
                   measurement: selected.benchmark ?? null },
                 confidence: jev?.confidence ?? null,
                 metrics: jev?.metrics ?? null,
+                assessment: jev?.assessment ?? null,
                 reason: decision.reason,
                 jev: jev ? { request: jev.request, response: jev.response } : null,
                 at: Date.now(),
@@ -249,10 +271,11 @@ export async function startCodexProxy({
             if (routing) {
               routing.reasoningEffort = body.reasoning?.effort;
               remember = () => {
-                states.set(key, { model: selected.model, prompt, reasoningEffort: routing.reasoningEffort });
+                states.set(key, { model: selected.model, prompt: routing.prompt,
+                  reasoningEffort: routing.reasoningEffort, failureCheckpoint: routing.failureCheckpoint });
                 writeDecision(requestStatusId, routing);
               };
-              debug(`${key} ${current.id} -> ${selected.id} (${routing.reason}) | ${prompt.slice(0, 60)}`);
+              debug(`${key} ${current.id} -> ${selected.id} (${routing.reason}) | ${routing.prompt.slice(0, 60)}`);
             }
           } else {
             const prompt = isTurn ? codexNewTurnPrompt(body) : null;
@@ -308,7 +331,7 @@ export async function startCodexProxy({
 
           const accepted = response.statusCode >= 200 && response.statusCode < 300;
           if (accepted) remember?.();
-          const inspectForDecision = routing && accepted;
+          const inspectForDecision = routing && accepted && announce;
           if (inspectForDecision) delete responseHeaders["content-length"];
           res.writeHead(response.statusCode, responseHeaders);
           if (!inspectForDecision) {

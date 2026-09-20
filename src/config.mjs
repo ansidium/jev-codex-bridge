@@ -66,7 +66,7 @@ export const COMPLEXITY_MAX_SCORE = COMPLEXITY_SCALE.length - 1;
 export const OVERRIDE_PATTERNS = TIERS.map((t) => ({
   tier: t.name,
   re: new RegExp(
-    `\\b(?:use|switch to|with|on)\\s+(?:${{
+    `^(?:please\\s+)?(?:use|switch to|используй|выбери|переключись на)\\s+(?:${{
       haiku: "haiku|fast|luna",
       sonnet: "sonnet|balanced|terra",
       opus: "opus|strong|sol",
@@ -88,6 +88,25 @@ export const QUESTIONS = {
   tool_complexity: score(
     "How complex is the tool use needed for `request`, given the task and tool results in `conversation` and `previous_request`, from no tools to many coordinated or stateful operations?",
     COMPLEXITY_SCALE,
+  ),
+  reasoning_gain: choice(
+    "How much useful reasoning remains for the CURRENT request and its actual dependencies? A short approval inherits the approved work. Judge the intellectual work, not message length, file count or old project difficulty.",
+    {
+      routine: "The action is fully specified or the answer is directly observable. Further deliberation has little value; this does not describe a correctness or safety review.",
+      considered: "Implementation or interpretation needs ordinary reasoning and checking, with no unresolved difficult causal or correctness question.",
+      deep: "An unresolved cause, interacting constraints, difficult correctness argument or consequential judgment needs sustained reasoning. Even a one-line change can require this.",
+      unknown: "The evidence does not establish the required depth. Missing evidence must not be treated as a simple task.",
+    },
+  ),
+  work_status: choice(
+    "What best describes the remaining work requested NOW, based on the latest outcomes in conversation? Classify the cause of a blocker, not just the presence of an error word or exit code.",
+    {
+      advancing: "Useful work remains and the available evidence does not show that the current reasoning approach has failed.",
+      reasoning_blocked: "Attempts to solve the requested problem failed substantively, or new conflicting evidence invalidates the approach; finding a correct solution needs renewed reasoning.",
+      external_blocked: "Progress awaits access, missing external information, network or service availability, or another external prerequisite; more reasoning alone cannot resolve it.",
+      complete: "The requested solution is established; only bounded execution, status checking or reporting remains.",
+      unknown: "The current outcome or source of the blocker is not established.",
+    },
   ),
 };
 

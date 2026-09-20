@@ -87,6 +87,11 @@ only its configured key file. Restart the service after changing that file.
 
 ## Routing context
 
+The classifier defaults to the tested `jev-1.13.0` release. The SDK's
+`TYPESAFE_DEFAULT_MODEL` variable can select another version or `jev-latest`;
+recheck routing behavior when changing it. [TypeSafe aliases](https://docs.typesafe.ai/models)
+can move to a different release without a bridge update.
+
 `JEV_ROUTING_CONTEXT` selects the text made available to Jev:
 
 | Value | Data sent |
@@ -113,8 +118,11 @@ initial byte budget after accounting for questions and model choices. If Jev
 returns `max_tokens_exceeded`, it retries with a smaller context within the same
 10-second total deadline. This is an estimate, not a local Jev tokenizer.
 
-When fitting is necessary, excerpts retain the beginning and end, including the
-task's opening and latest results, and mark omissions explicitly. The current
+When fitting is necessary, the bridge prioritizes user constraints, reasoning
+summaries and failed tool evidence, including significant lines in the middle of
+long results. Retained records remain in source order with omission markers;
+large individual records retain their ends and significant interior lines. These
+heuristics cannot guarantee that every relevant detail survives. The current
 request has priority; an oversized current request may itself need an excerpt.
 `$jev-explain` reports the mode and whether fitting occurred. All of this changes
 only routing data; the original Codex history still goes to OpenAI.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { codexRoutingContext, contextExcerpt, fitRoutingState } from "../src/routing-context.mjs";
+import { codexRoutingContext, contextExcerpt, conversationExcerpt, fitRoutingState } from "../src/routing-context.mjs";
 import { askJev } from "../src/router.mjs";
 
 test("task context carries constraints, failed tools, summaries and media indicators", () => {
@@ -60,6 +60,38 @@ test("window fitting preserves Unicode and both ends while keeping the current r
   const small = fitRoutingState({ request: "Continue", conversation: "A failed check" }, 2048, "task");
   assert.equal(small.conversation, "A failed check");
   assert.equal(small.routing_context.shortened, false);
+});
+
+test("fitting retains interior failures, middle constraints and intact source records", () => {
+  const log = "Test run start\n" + "Passed ordinary check\n".repeat(2500) +
+    "FAILED: checkpoint discarded an acknowledged transaction\nExpected 42; actual 41\n" +
+    "Passed ordinary check\n".repeat(2500) + "Test run finished";
+  const excerpt = contextExcerpt(log, 3000);
+  assert.match(excerpt, /FAILED: checkpoint discarded an acknowledged transaction/);
+  assert.match(excerpt, /Expected 42; actual 41/);
+  assert.match(excerpt, /Test run start/);
+  assert.match(excerpt, /Test run finished/);
+  assert(Buffer.byteLength(JSON.stringify(excerpt)) <= 3000);
+  const body = { input: [
+    { role: "user", content: "Repair crash recovery without data loss." },
+    ...Array.from({ length: 80 }, (_, i) => ({ role: "assistant", content: `Routine result ${i}: ` + "ok ".repeat(500) })),
+    { role: "developer", content: "Never acknowledge writes before durability is established." },
+    { type: "function_call", name: "recovery_tests", call_id: "middle-test", arguments: "check invariants" },
+    { type: "function_call_output", call_id: "middle-test", output: log },
+    { role: "user", content: "Continue the repair." },
+  ] };
+  const conversation = codexRoutingContext(body);
+  const fitted = conversationExcerpt(conversation, 7000);
+  const entries = fitted.split("\n").map(line => JSON.parse(line));
+  assert.match(fitted, /Never acknowledge writes/);
+  assert.match(fitted, /FAILED: checkpoint discarded/);
+  const failure = entries.find(entry => entry.type === "function_call_output");
+  assert.equal(failure.name, "recovery_tests");
+  assert.equal(failure.call_id, "middle-test");
+  assert.equal(failure.source_index, 83);
+  assert(Buffer.byteLength(JSON.stringify(fitted)) <= 7000);
+  assert.doesNotMatch(fitted, /\ufffd/);
+  assert.equal(body.input[83].output, log);
 });
 
 test("Jev size rejections retry with more compact evidence; other validation failures do not", async t => {

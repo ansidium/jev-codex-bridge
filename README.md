@@ -58,7 +58,8 @@ Codex Desktop / CLI
 
 - Uses the task history and tool results to choose among your account's supported
   model-and-effort pairs, with quality first and your reasoning selection as a ceiling.
-- Keeps the chosen pair throughout the turn, including tool calls.
+- Keeps the chosen pair through tool calls, with a checked upgrade if repeated
+  failures reveal a reasoning blocker.
 - Keeps the current pair if Jev is unavailable; low confidence prevents a downgrade.
 
 Run `$jev-explain` in Codex to inspect the latest decision.

@@ -39,8 +39,12 @@ prices and evaluations change.
 ## How evidence affects a decision
 
 Jev receives the supported pairs, measurements, context size and
-task history with tool evidence. It chooses a pair and separately scores task, reasoning and
-tool complexity. These scores are diagnostics, not a weighted pricing formula.
+task history with tool evidence. It chooses a pair and separately assesses task,
+reasoning and tool complexity, useful remaining reasoning, and the cause of any
+blocker. These diagnostics do not form a weighted pricing formula. The remaining
+reasoning assessment distinguishes routine steps from difficult reviews; it
+does not impose a cheap-model ceiling. The pair-selection question remains
+independent of these assessments.
 [TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
 independently; it does not run the candidate models or verify their answers.
 
@@ -55,15 +59,24 @@ No model is removed solely for being off that frontier.
 
 The bridge keeps an established pair when a proposed reduction in measured
 capability has low confidence. It does not cap an upgrade to save money.
-For a measured downgrade to another model, it compares possible cache rebuilding
-with benchmark task savings. This estimate uses approximate context size and
+When Jev cannot establish the required reasoning from the available evidence,
+its recommendation cannot reduce capability or same-model effort, even on a
+fresh task. Explicit user model choices still take precedence.
+For a measured downgrade or a same-model effort reduction, it compares possible
+cache rebuilding with benchmark task savings. This estimate uses approximate context size and
 published rates; it does not predict actual cache hits, future retries, or Codex
 subscription usage. It cannot force a downgrade.
 
 ## Continuing work
 
-Model and effort stay fixed through tool continuations. For a new user message,
-the task history and recent results help distinguish a continuation from a new task.
+Model and effort normally stay fixed through tool continuations. After two new
+failed tool results, the bridge asks Jev to reassess at the next request boundary.
+A change requires a sufficiently confident substantive reasoning blocker and a
+stronger measured pair or deeper effort on the same model. External blockers
+cannot trigger an upgrade, and continuations cannot trigger a downgrade. Checked
+failures are remembered across bridge restarts to avoid rechecking the same results.
+
+For a new user message, the task history and recent results help distinguish a continuation from a new task.
 The previous request is a fallback when it is absent from the supplied history.
 The current request defines the work when the user explicitly starts a new task.
 
@@ -89,9 +102,15 @@ upgrade. Downgrade checks run after the classifier's recommendation.
 
 Changing effort can also affect caching. Astra supports `configuration_update`
 in standard single-agent mode, with restrictions on compaction. The bridge
-does not inject these items into Codex histories. See OpenAI's
+does not inject these items into Codex histories or claim guaranteed cache hits.
+It preserves Codex's cache key and avoids effort reductions whose estimated
+rebuild exceeds the expected saving. Quality upgrades remain eligible. See OpenAI's
 [reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) and
 [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+Ultra's proactive delegation instructions are controlled by the Codex client.
+Selecting an effort in the bridge does not rewrite those instructions or change
+the user's delegation policy.
 
 ## What remains unmeasured
 
