@@ -52,11 +52,12 @@ The classifier does not receive the previously selected pair. This prevents the
 previous assignment from anchoring its recommendation. The bridge keeps that
 pair locally for fallback, downgrade checks and explanations.
 
-Explicit model requests are interpreted by Jev in the same call, using model IDs
-from the available catalog. There is no phrase dictionary or language-specific
-model-command parser. A confident explicit request takes precedence only when
-Jev's selected pair belongs to that model; disagreement preserves the current
-pair. Quoted examples and model mentions do not themselves force a selection.
+For a guaranteed model and effort, use Codex's model picker or CLI options.
+Manual selections pass through without classification. While Jev Router is
+selected, the prompt is evidence for automatic routing, including any stated
+preferences; it is not a model-switching command protocol. Text cannot bypass
+the confidence, missing-evidence or cache guards. There is no phrase parser or
+separate inferred model override that can conflict with the selected pair.
 
 Pairs with no cheaper, strictly higher-scoring alternative are marked as being
 on the price-quality frontier. This is advisory: equal rounded scores do not
@@ -67,7 +68,7 @@ The bridge keeps an established pair when a proposed reduction in measured
 capability has low confidence. It does not cap an upgrade to save money.
 When Jev cannot establish the required reasoning from the available evidence,
 its recommendation cannot reduce capability or same-model effort, even on a
-fresh task. Explicit user model choices still take precedence.
+fresh task. Manual model selections still take precedence.
 For a measured downgrade or a same-model effort reduction, it compares possible
 cache rebuilding with benchmark task savings. This estimate uses approximate context size and
 published rates; it does not predict actual cache hits, future retries, or Codex
@@ -82,9 +83,12 @@ stronger measured pair or deeper effort on the same model. External blockers
 cannot trigger an upgrade, and continuations cannot trigger a downgrade. Checked
 failures are remembered across bridge restarts to avoid rechecking the same results.
 
-For a new user message, the task history and recent results help distinguish a continuation from a new task.
+For a new user message, the task history and recent results establish the scope
+of the current request and its necessary dependencies. Approval or an instruction
+to continue inherits the unfinished work. An information request includes the
+reasoning and verification needed to answer it, without automatically inheriting
+all earlier implementation work. A short correctness question can still be hard.
 The previous request is a fallback when it is absent from the supplied history.
-The current request defines the work when the user explicitly starts a new task.
 
 The default task context leaves out global instructions and tool schemas. A
 `full` mode includes those fields for comparisons. TypeSafe documents that

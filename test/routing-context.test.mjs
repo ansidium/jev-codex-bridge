@@ -130,7 +130,7 @@ test("Jev size rejections retry with more compact evidence; other validation fai
       }
       res.end(JSON.stringify({ model: "jev-test", answers: {
         profile: { choice: "test@low", confidence: 0.95 },
-        requested_model: { choice: "automatic", confidence: 0.99 },
+        requested_model: { choice: "test", confidence: 0.99 },
         task_complexity: { score: 8 }, reasoning_required: { score: 8 }, tool_complexity: { score: 7 },
       }, usage: { input_tokens: 100, output_tokens: 10 } }));
     });
@@ -150,8 +150,9 @@ test("Jev size rejections retry with more compact evidence; other validation fai
     previousPrompt: "Keep transaction invariants", conversation: "Start of task. " + "large tool result\n".repeat(20000) + " Unresolved failure at the end." };
   const result = await askJev(args);
   assert.equal(result.choice, "test@low");
-  assert.equal(result.assessment.requestedModel.choice, "automatic");
-  assert.deepEqual(Object.keys(seen[0].questions.requested_model.criteria), ["automatic", "test"]);
+  assert.equal(result.assessment.requestedModel, undefined);
+  assert.equal(result.response.answers.requested_model.choice, "test");
+  assert.equal(seen[0].questions.requested_model, undefined);
   assert.equal(seen.length, 2);
   assert(seen[1].state.conversation.length < seen[0].state.conversation.length);
   assert.equal(seen[1].state.request, args.prompt);

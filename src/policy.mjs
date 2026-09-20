@@ -5,11 +5,6 @@ export function decide({ jev, current, profiles, contextTokens = 0, hasPriorMode
     reason: profile.id === current.id ? `${reason}/no-change` : reason,
     changed: profile.id !== current.id });
   const chosen = profiles.find(profile => profile.id === jev?.choice);
-  const requested = jev?.assessment?.requestedModel;
-  if (requested?.confidence >= THRESHOLDS.minConfidence && profiles.some(profile => profile.model === requested.choice)) {
-    if (chosen?.model !== requested.choice) return settle(current, "requested-model-mismatch");
-    if (!upgradeOnly) return settle(chosen, "override");
-  }
   if (!chosen) return settle(current, "jev-unavailable");
 
   const before = current.benchmark;

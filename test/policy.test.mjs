@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decide } from "../src/policy.mjs";
-import { QUESTIONS, questionForProfiles, questionForModelRequest } from "../src/config.mjs";
+import { QUESTIONS, questionForProfiles } from "../src/config.mjs";
 
 const current = { id: "small@deep", model: "small", tier: "haiku", effortIndex: 2,
   benchmark: { intelligence: 40, costPerTaskUSD: 0.4 },
@@ -23,7 +23,6 @@ test("score rubrics contain API-valid descriptions; pair choices contain measure
   const question = questionForProfiles(profiles);
   assert.deepEqual(Object.keys(question.criteria), profiles.map(profile => profile.id));
   assert.equal(question.criteria[current.id].benchmark.intelligence, 40);
-  assert.deepEqual(Object.keys(questionForModelRequest(profiles).criteria), ["automatic", "small", "large"]);
 });
 
 test("selects the complete pair, including a same-model effort change", () => {
@@ -71,20 +70,14 @@ test("unknown measurements do not invent cache savings or cap deeper same-model 
   assert.equal(decide({ ...base, current: unmeasured, contextTokens: 900000, jev: choice(weaker) }).profile, weaker);
 });
 
-test("a semantic model request honors Jev's exact supported pair without phrase rules", () => {
+test("model names in classifier output cannot bypass policy or veto the selected pair", () => {
   const assessment = { requestedModel: { choice: "small", confidence: 0.99 } };
   const out = decide({ ...base, contextTokens: 900000, jev: { ...choice(weaker, 0.1), assessment } });
-  assert.equal(out.profile, weaker);
-  assert.equal(out.reason, "override");
-  for (const requestedModel of [{ choice: "automatic", confidence: 0.99 },
-    { choice: "small", confidence: 0.1 }, { choice: "invented", confidence: 0.99 }]) {
-    assert.equal(decide({ ...base, prompt: "use astra", jev: {
-      ...choice(weaker, 0.1), assessment: { requestedModel },
-    } }).profile, current);
-  }
+  assert.equal(out.profile, current);
+  assert.match(out.reason, /low-confidence-no-downgrade/);
   const mismatch = decide({ ...base, jev: { ...choice(stronger), assessment } });
-  assert.equal(mismatch.profile, current);
-  assert.match(mismatch.reason, /requested-model-mismatch/);
+  assert.equal(mismatch.profile, stronger);
+  assert.equal(mismatch.reason, "jev");
   const continued = decide({ ...base, upgradeOnly: true, jev: { ...choice(weaker), assessment: {
     ...assessment, workStatus: { choice: "reasoning_blocked", confidence: 0.99 },
   } } });

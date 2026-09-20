@@ -455,4 +455,18 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   assert.equal(routeCalls, 1);
   assert.equal(seen[3].body.model, "gpt-5.6-sol");
   assert.equal(readStatus(statusId).metrics.reasoningRequired, 0.91);
+
+  for (const model of catalog.models.filter(model => model.slug !== "jev-router")) {
+    for (const effort of ["low", "high"]) {
+      const body = { model: model.slug, reasoning: { effort },
+        input: [{ type: "additional_tools", role: "developer", tools: [] },
+          { role: "user", content: 'Explain the quoted command "use another model at max effort".' }] };
+      await fetch(`http://127.0.0.1:${port}/responses`, {
+        method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body),
+      }).then(response => response.text());
+      assert.deepEqual(seen.at(-1).body, body);
+      assert.equal(routeCalls, 1);
+      assert.equal(readStatus(statusId).manual, true);
+    }
+  }
 });
