@@ -172,14 +172,18 @@ export async function startCodexProxy({
     // Desktop can reuse its own catalog after the bridge restarts. Fetch once
     // with the current account's auth instead of guessing supported efforts.
     return catalogRequest ??= (async () => {
-      const response = await fetch(`${chatgptBaseURL.replace(/\/$/, "")}/models`, {
+      const url = new URL(`${chatgptBaseURL.replace(/\/$/, "")}/models`);
+      const clientVersion = headers["user-agent"]?.match(/\/(\d+\.\d+\.\d+)(?:[-+\s]|$)/)?.[1];
+      if (clientVersion) url.searchParams.set("client_version", clientVersion);
+      const response = await fetch(url, {
         headers: Object.fromEntries(["authorization", "chatgpt-account-id", "user-agent"]
           .filter(key => headers[key]).map(key => [key, headers[key]])),
         signal: AbortSignal.timeout(THRESHOLDS.jevDeadlineMs),
       });
       if (!response.ok) throw new Error(`Model catalog returned ${response.status}`);
       rememberCatalog(await response.json());
-    })().catch(error => debug(`using cold-start defaults: ${error.message}`));
+    })().catch(error => debug(`using cold-start defaults: ${error.message}`))
+      .finally(() => { catalogRequest = undefined; });
   };
 
   const server = http.createServer((req, res) => {
@@ -308,6 +312,9 @@ export async function startCodexProxy({
       const transport = target.protocol === "http:" ? http : https;
       const headers = { ...req.headers, host: target.host };
       delete headers["content-length"];
+      const isModels = req.method === "GET" && /\/models(?:\?|$)/.test(req.url ?? "");
+      // The catalog is parsed and extended below; request an uncompressed body.
+      if (isModels) headers["accept-encoding"] = "identity";
       const upstream = transport.request(
         {
           hostname: target.hostname,
@@ -318,7 +325,6 @@ export async function startCodexProxy({
         },
         (response) => {
           const responseHeaders = { ...response.headers };
-          const isModels = req.method === "GET" && /\/models(?:\?|$)/.test(req.url ?? "");
           if (isModels) {
             const body = [];
             response.on("data", (chunk) => body.push(chunk));
