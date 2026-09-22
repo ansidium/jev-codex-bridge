@@ -12,11 +12,11 @@ const result = (id, output) => ({ type: "function_call_output", call_id: id, out
 const answer = (choice, gain = "deep", work = "advancing", confidence = 0.99) => ({ choice, confidence,
   assessment: { reasoningGain: { choice: gain, confidence: 0.99 }, workStatus: { choice: work, confidence: 0.99 } } });
 
-async function fixture(t, route, { cli = false, respond } = {}) {
+async function fixture(t, route, { cli = false, respond, models = ["gpt-5.6-luna", "gpt-6-astra"] } = {}) {
   const thread = randomUUID(), record = cli ? `codex-test-${thread}` : `codex-thread-${thread}`;
   const calls = [], seen = [], disconnected = [];
   const upstream = http.createServer((req, res) => {
-    if (req.url.startsWith("/models")) return res.end(JSON.stringify({ models: ["gpt-5.6-luna", "gpt-6-astra"].map(slug => ({
+    if (req.url.startsWith("/models")) return res.end(JSON.stringify({ models: models.map(slug => ({
       slug, visibility: "list", supported_in_api: true,
       supported_reasoning_levels: ["low", "max"].map(effort => ({ effort })), default_reasoning_level: "max",
     })) }));
@@ -187,4 +187,97 @@ test("a rejected upstream request leaves no cached evidence and its retry is rea
   assert.equal((await f.send(input, { turnId })).status, 200);
   assert.equal(f.calls.length, 2);
   assert.equal(f.status().model, "gpt-6-astra");
+});
+
+const completion = (res, cached = 128, written = 64) => res.writeHead(200, { "content-type": "text/event-stream" }).end(
+  `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { status: "completed",
+    usage: { input_tokens: 300, input_tokens_details: { cached_tokens: cached, cache_write_tokens: written }, output_tokens: 12 } } })}\n\n`);
+
+test("measured cache survives restart, protects an unchanged prefix and is not attributed to a compacted prefix", async t => {
+  let next = answer("gpt-6-sol@max");
+  const f = await fixture(t, () => next, { models: ["gpt-6-luna", "gpt-6-sol"], respond: (_body, res) => completion(res) });
+  const turnId = randomUUID(), input = initial("Complete the proof.");
+  await f.send(input, { turnId });
+  assert.equal(f.status().usage.inputTokens, 300);
+  assert.equal(f.status().cache.tokens, 192);
+  await f.restart();
+  next = answer("gpt-6-sol@low", "routine", "complete");
+  input.push(result("verified", "The proof is complete; report the result."));
+  await f.send(input, { turnId });
+  assert.equal(f.seen.at(-1).model, "gpt-6-sol");
+  assert.equal(f.seen.at(-1).reasoning.effort, "max");
+  assert.equal(f.status().cachedPrefixTokens, 192);
+  assert.match(f.status().reason, /cache-savings-unmeasured/);
+  const before = f.status();
+  await f.send(initial("Create a compact summary."), { turnId, kind: "compaction" });
+  assert.deepEqual(f.status(), before);
+  await f.send([{ role: "user", content: "Summary: the proof has been verified; only reporting remains." }], { turnId });
+  assert.equal(f.seen.at(-1).model, "gpt-6-sol");
+  assert.equal(f.seen.at(-1).reasoning.effort, "low");
+  assert.equal(f.status().cachedPrefixTokens, 0);
+});
+
+test("uncached responses and missing usage do not invent a cache-rebuild veto", async t => {
+  for (const reportUsage of [true, false]) await t.test(String(reportUsage), async t => {
+    let next = answer("gpt-6-sol@max");
+    const f = await fixture(t, () => next, { models: ["gpt-6-luna", "gpt-6-sol"], respond: (_body, res) => {
+      if (reportUsage) completion(res, 0, 0); else res.end("no usage");
+    } });
+    const turnId = randomUUID(), input = initial("Complete the work.");
+    await f.send(input, { turnId });
+    next = answer("gpt-6-sol@low", "routine", "complete");
+    input.push(result("done", "Verified; only the final report remains."));
+    await f.send(input, { turnId });
+    assert.equal(f.seen.at(-1).model, "gpt-6-sol");
+    assert.equal(f.seen.at(-1).reasoning.effort, "low");
+    assert.equal(f.status().cachedPrefixTokens, 0);
+  });
+});
+
+test("late completion usage cannot overwrite a newer request's model or cache", async t => {
+  const received = Promise.withResolvers(), release = Promise.withResolvers();
+  const f = await fixture(t, ({ prompt }) => answer(prompt === "Old request" ? "gpt-6-astra@max" : "gpt-5.6-luna@low", "routine", "complete"), {
+    respond: async (body, res) => {
+      if (body.input.at(-1).content === "Old request") {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.write('event: response.created\ndata: {"type":"response.created"}\n\n');
+        received.resolve(); await release.promise;
+        res.end(`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed",
+          usage: { input_tokens: 999, input_tokens_details: { cached_tokens: 999 } } } })}\n\n`);
+      } else completion(res, 0, 0);
+    },
+  });
+  const older = f.send(initial("Old request"), { turnId: randomUUID() });
+  await received.promise;
+  await f.send(initial("New request"), { turnId: randomUUID() });
+  const newest = f.status();
+  release.resolve(); await older;
+  assert.equal(newest.cache.tokens, 0);
+  assert.equal(newest.usage.inputTokens, 300);
+  assert.deepEqual(f.status(), newest);
+});
+
+test("manual selections collect usage and a failed stream clears it without overriding the picker", async t => {
+  let fail = false;
+  const f = await fixture(t, () => answer("gpt-6-sol@low", "routine", "complete"), {
+    models: ["gpt-6-luna", "gpt-6-sol"], respond: (_body, res) => {
+      if (fail) res.writeHead(200, { "content-type": "text/event-stream" }).end(
+        'data: {"type":"response.failed","response":{"status":"failed","usage":{"input_tokens":100}}}\n\n');
+      else completion(res);
+    },
+  });
+  const input = initial("Complete the task."), turnId = randomUUID();
+  await f.send(input, { turnId, model: "gpt-6-sol" });
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.status().manual, true);
+  assert.equal(f.status().cache.tokens, 192);
+  fail = true;
+  input.push(result("done", "Verified. Report the result."));
+  await f.send(input, { turnId });
+  assert.match(f.status().reason, /cache-savings-unmeasured/);
+  assert.equal(f.status().cache, undefined);
+  assert.equal(f.status().usage, undefined);
+  input.push({ role: "user", content: "Retry the final report." });
+  await f.send(input, { turnId });
+  assert.equal(f.seen.at(-1).reasoning.effort, "low");
 });

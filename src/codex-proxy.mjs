@@ -9,6 +9,7 @@ import { decide } from "./policy.mjs";
 import { codexProfiles, fallbackProfile, frontierProfiles, PROFILE_DATA } from "./profiles.mjs";
 import { log } from "./log.mjs";
 import { codexStatusId, readStatus, writeDecision, writeStatus } from "./status.mjs";
+import { cachePrefix, observeUsage, reusableCacheTokens } from "./response-usage.mjs";
 
 const CHATGPT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 const API_BASE_URL = "https://api.openai.com/v1";
@@ -194,6 +195,8 @@ export async function startCodexProxy({
       let out = Buffer.concat(chunks);
       let routing;
       let remember;
+      let rememberUsage;
+      let streaming = false;
       let announce = true;
       const compactEndpoint = /\/responses\/compact(?:\?|$)/.test(req.url ?? "");
       if (req.method === "POST" && (compactEndpoint || /\/responses(?:\?|$)/.test(req.url ?? ""))) {
@@ -252,7 +255,9 @@ export async function startCodexProxy({
               const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
               const jev = await route({ prompt: routingPrompt, current, contextTokens, profiles: options,
                 previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation });
-              const decision = decide({ jev, current, profiles, contextTokens,
+              const cachedPrefixTokens = reusableCacheTokens({ ...body, model: current.model,
+                reasoning: { ...body.reasoning, effort: current.effort } }, previous?.cache);
+              const decision = decide({ jev, current, profiles, cachedPrefixTokens,
                 hasPriorModel: Boolean(priorModel), continuation });
               selected = decision.profile;
               announce = !continuation || decision.changed;
@@ -273,6 +278,7 @@ export async function startCodexProxy({
                 metrics: jev?.metrics ?? null,
                 assessment: jev?.assessment ?? null,
                 reason: decision.reason,
+                cachedPrefixTokens,
                 jev: jev ? { request: jev.request, response: jev.response } : null,
                 at: Date.now(),
               };
@@ -300,6 +306,35 @@ export async function startCodexProxy({
               };
             }
           }
+          if (isTurn) {
+            streaming = body.stream === true;
+            const prefix = cachePrefix(body);
+            const rememberDecision = remember;
+            remember = () => {
+              rememberDecision?.();
+              if (res.destroyed || revisions.get(key) !== revision) return;
+              // A failed or interrupted response must not leave older usage
+              // looking like a measurement of this request.
+              const state = states.get(key) ?? previous;
+              if (!state || state.model !== body.model) return;
+              const { cache, usage, ...rest } = state;
+              states.set(key, rest);
+              const saved = readStatus(requestStatusId);
+              if (saved?.cache || saved?.usage) {
+                const { cache, usage, ...rest } = saved;
+                writeStatus(requestStatusId, rest);
+              }
+            };
+            rememberUsage = usage => {
+              if (res.destroyed || revisions.get(key) !== revision) return;
+              const state = states.get(key);
+              if (!state || state.model !== body.model || state.reasoningEffort !== body.reasoning?.effort) return;
+              const cache = { ...prefix, tokens: (usage.cachedInputTokens ?? 0) + (usage.cacheWriteInputTokens ?? 0) };
+              states.set(key, { ...state, cache, usage });
+              const saved = readStatus(requestStatusId);
+              if (saved) writeStatus(requestStatusId, { ...saved, cache, usage });
+            };
+          }
           out = Buffer.from(JSON.stringify(body));
         } catch (err) {
           debug(`codex passthrough, could not process body: ${err.message}`);
@@ -313,8 +348,8 @@ export async function startCodexProxy({
       const headers = { ...req.headers, host: target.host };
       delete headers["content-length"];
       const isModels = req.method === "GET" && /\/models(?:\?|$)/.test(req.url ?? "");
-      // The catalog is parsed and extended below; request an uncompressed body.
-      if (isModels) headers["accept-encoding"] = "identity";
+      // Catalog and usage inspection require an uncompressed response body.
+      if (isModels || rememberUsage) headers["accept-encoding"] = "identity";
       const upstream = transport.request(
         {
           hostname: target.hostname,
@@ -345,6 +380,7 @@ export async function startCodexProxy({
 
           const accepted = response.statusCode >= 200 && response.statusCode < 300;
           if (accepted) remember?.();
+          if (accepted && rememberUsage) observeUsage(response, rememberUsage, streaming);
           const inspectForDecision = routing && accepted && announce;
           if (inspectForDecision) delete responseHeaders["content-length"];
           res.writeHead(response.statusCode, responseHeaders);
@@ -352,24 +388,25 @@ export async function startCodexProxy({
             response.pipe(res);
             return;
           }
-          let pending = "";
+          let pending = Buffer.alloc(0);
           let inspected = false;
           response.on("data", (chunk) => {
             if (inspected) return void res.write(chunk);
-            pending += chunk.toString();
-            const end = pending.indexOf("\n\n");
+            pending = Buffer.concat([pending, chunk]);
+            const lf = pending.indexOf("\n\n"), crlf = pending.indexOf("\r\n\r\n");
+            const end = lf >= 0 ? lf + 2 : crlf >= 0 ? crlf + 4 : -1;
             if (end < 0) return;
-            const first = pending.slice(0, end + 2);
+            const first = pending.subarray(0, end);
             res.write(first);
-            const isSSE = /^(?:event|data):/m.test(first);
+            const isSSE = /^(?:event|data):/m.test(first.toString());
             if (isSSE) res.write(jevDecisionEvents(routing));
             debug(`codex decision display ${isSSE ? "inject" : "skip"}`);
-            res.write(pending.slice(end + 2));
-            pending = "";
+            res.write(pending.subarray(end));
+            pending = Buffer.alloc(0);
             inspected = true;
           });
           response.on("end", () => {
-            if (pending) {
+            if (pending.length) {
               debug("codex decision display skip");
               res.write(pending);
             }

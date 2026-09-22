@@ -12,7 +12,7 @@ September 23, 2026, with source URLs and units:
 
 - Artificial Analysis Intelligence Index v4.3.2 scores for each measured effort.
 - AA-Briefcase v1.1 Elo for professional deliverables and Terminal-Bench 4.0
-  success rates (0 to 1), from the same snapshot, for task-specific comparisons.
+  success rates (0 to 1), retained in the source snapshot for research.
 - Weighted cost per benchmark task, which includes input, cache reads and writes,
   reasoning output and answer output.
 - OpenAI Standard API input, cached-input, cache-write and output prices,
@@ -36,8 +36,10 @@ AA has not published complete weighted task costs for these two releases in this
 snapshot. Those fields are omitted, and neither model establishes price-quality
 dominance using token prices alone. Previous-generation observations remain for
 manual selections and account catalogs that still expose those models.
-The classifier receives the individual evaluation results alongside the aggregate;
-they do not impose a model preference for particular words or task categories.
+The classifier receives the aggregate intelligence score and measured task cost.
+Individual evaluation results remain in the source data and diagnostics. Feeding
+all of their different scales into the same choice biased a controlled comparison
+toward Astra even on routine tasks; no task-word rules compensate for that bias.
 
 The [index methodology](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
 covers ten evaluations across agent tasks, coding, science and general knowledge.
@@ -81,18 +83,34 @@ on the price-quality frontier. This is advisory: equal rounded scores do not
 prove equal capability, and specialized strengths may differ from the aggregate.
 No model is removed solely for being off that frontier.
 
-The bridge keeps an established pair when a proposed reduction in measured
-capability has low confidence. It does not cap an upgrade to save money.
+The bridge keeps the current pair, including the cold-start fallback, when a
+proposed reduction or an unproven capability change has low confidence. It does
+not cap an upgrade to save money. Effort order comes from the account catalog.
+For an unmeasured effort, measured levels of the same model bound a comparison:
+if a lower effort already exceeds the current pair, a higher effort can upgrade.
+This does not assign the unmeasured level a benchmark score or task cost.
+Overlapping bounds leave the cross-model comparison unknown, so it receives
+the same protection as a downgrade. Equal rounded scores do not prove an upgrade.
 When Jev cannot establish the required reasoning from the available evidence,
 its recommendation cannot reduce capability or same-model effort, even on a
 fresh task. Manual model selections still take precedence.
-For a measured downgrade or a same-model effort reduction, it compares possible
-cache rebuilding with benchmark task savings. This estimate uses approximate context size and
-published rates; it does not predict actual cache hits, future retries, or Codex
-subscription usage. It cannot force a downgrade.
-If a downgrade could incur a cache rebuild but either task cost is unpublished,
-the current pair is retained: missing costs cannot establish savings. This does
-not block an upgrade or a fresh selection without an established model.
+For a protected change, the bridge compares rebuilding an observed cached prefix
+with benchmark task savings. Successful Responses completions supply actual
+input, cache-read, cache-write, output and reasoning-token counts when available.
+Only cache reads and writes from the last completed request count, and only when
+its entire input prefix, instructions, tools, model, effort and other request
+settings remain unchanged. Per-turn client metadata is excluded from that check.
+The persisted evidence contains a hash and item count, not another copy of input.
+Compaction or a changed prefix invalidates reuse; the bridge does not estimate
+partially reusable prefixes from JSON length. Missing usage is unknown, not a
+measured zero or evidence of a hot cache. Failed and interrupted responses do
+not establish cache measurements, and older responses cannot overwrite newer ones.
+The estimate uses published rates; it does not predict future cache hits, cache
+expiry, retries or Codex subscription usage. It cannot force a downgrade.
+If rebuilding that measured prefix costs more than retaining it but task costs
+are unpublished, the current pair is retained: missing costs cannot establish
+savings. Without measured reuse, missing task costs alone do not veto a change.
+Quality upgrades remain eligible regardless of cache cost.
 
 ## Continuing work
 
@@ -171,6 +189,14 @@ the user's delegation policy.
 There is no workload-calibrated accuracy or savings guarantee. Jev confidence
 describes its selection, not the probability that the answer will be correct.
 Benchmark observations are priors, not a substitute for testing real tasks.
+
+A September 23, 2026 comparison against the preceding bridge revision tested
+eight tasks twice per version, checking generated answers independently. Both
+versions passed 16/16, including counterexamples for unsafe concurrency and
+generated interval-subtraction code checked on 250 inputs per answer. The
+preceding version chose Astra 16 times; the revised selection chose Astra 9,
+Sol 6 and Luna 1 time. This small sample supports retaining the simpler benchmark
+input; it does not establish a general accuracy, latency or savings guarantee.
 
 A workload comparison needs repeated, held-out tasks with independent correctness
 checks. Record first-pass success, retries, tool errors, total completion time,

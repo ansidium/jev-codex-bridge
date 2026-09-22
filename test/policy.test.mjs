@@ -24,7 +24,7 @@ test("score rubrics contain API-valid descriptions; pair choices contain measure
   assert.deepEqual(Object.keys(question.criteria), profiles.map(profile => profile.id));
   assert.equal(question.criteria[current.id].benchmark.intelligence, 40);
   const specialized = { ...current, benchmark: { ...current.benchmark, aaBriefcaseElo: 1200, terminalBench4SuccessRate: 0.4 } };
-  assert.deepEqual(questionForProfiles([specialized]).criteria[current.id].benchmark, specialized.benchmark);
+  assert.deepEqual(questionForProfiles([specialized]).criteria[current.id].benchmark, current.benchmark);
 });
 
 test("selects the complete pair, including a same-model effort change", () => {
@@ -40,6 +40,27 @@ test("uncertain downgrades preserve the established pair, including effort", () 
   const out = decide({ ...base, jev: choice(weaker, 0.2) });
   assert.equal(out.profile, current);
   assert.match(out.reason, /low-confidence-no-downgrade/);
+});
+
+test("cold-start uncertainty protects the fallback just as it protects an established pair", () => {
+  for (const hasPriorModel of [false, true]) {
+    assert.equal(decide({ ...base, hasPriorModel, jev: choice(weaker, 0.01) }).profile, current);
+    assert.equal(decide({ ...base, hasPriorModel, jev: choice(weaker) }).profile, weaker);
+    assert.equal(decide({ ...base, hasPriorModel, jev: choice(stronger, 0.01) }).profile, stronger);
+  }
+});
+
+test("catalog effort order and measured bounds permit an unmeasured capability upgrade", () => {
+  const ultra = { ...stronger, id: "large@ultra", effortIndex: 3, benchmark: undefined };
+  const all = [...profiles, ultra];
+  const escalation = { ...choice(ultra), assessment: { workStatus: { choice: "reasoning_blocked", confidence: 0.99 },
+    reasoningGain: { choice: "deep", confidence: 0.99 } } };
+  assert.equal(decide({ ...base, profiles: all, continuation: true, jev: escalation }).profile, ultra);
+  assert.equal(ultra.benchmark, undefined);
+  assert.equal(decide({ ...base, current: ultra, profiles: all, continuation: true, jev: choice(current) }).profile, ultra);
+  const unknown = { ...ultra, model: "unmeasured", id: "unmeasured@ultra" };
+  assert.equal(decide({ ...base, profiles: [...all, unknown], continuation: true, jev: choice(unknown) }).profile, current);
+  assert.equal(decide({ ...base, profiles: [...all, unknown], jev: choice(unknown, 0.01) }).profile, current);
 });
 
 test("capability is compared by measurements, not model tier order", () => {
@@ -62,26 +83,26 @@ test("failure and an invented profile preserve the current pair", () => {
 test("cache guard uses rates and task-cost difference, not a fixed context limit", () => {
   const expensive = { ...stronger, benchmark: { intelligence: 50, costPerTaskUSD: 0.15 } };
   const params = { ...base, current: expensive, profiles: [expensive, weaker], jev: choice(weaker) };
-  assert.equal(decide({ ...params, contextTokens: 1000 }).profile, weaker);
-  assert.equal(decide({ ...params, contextTokens: 400000 }).profile, expensive);
-  assert.equal(decide({ ...params, contextTokens: 400000, hasPriorModel: false }).profile, weaker);
+  assert.equal(decide({ ...params, cachedPrefixTokens: 1000 }).profile, weaker);
+  assert.equal(decide({ ...params, cachedPrefixTokens: 400000 }).profile, expensive);
+  assert.equal(decide({ ...params, cachedPrefixTokens: 400000, hasPriorModel: false }).profile, weaker);
 });
 
 test("unknown measurements do not invent cache savings or cap deeper same-model effort", () => {
   const unmeasured = { ...current, id: "small@new-level", effortIndex: 3, benchmark: undefined };
   assert.equal(decide({ ...base, profiles: [current, unmeasured], jev: choice(unmeasured, 0.2) }).profile, unmeasured);
-  assert.equal(decide({ ...base, current: unmeasured, contextTokens: 900000, jev: choice(weaker) }).profile, unmeasured);
+  assert.equal(decide({ ...base, current: unmeasured, cachedPrefixTokens: 900000, jev: choice(weaker) }).profile, unmeasured);
 });
 
 test("unpublished task costs cannot justify cache churn or prevent quality upgrades", () => {
   for (const missing of ["before", "after", "both"]) {
     const before = missing === "after" ? current : { ...current, benchmark: { intelligence: 40 } };
     const after = missing === "before" ? weaker : { ...weaker, benchmark: { intelligence: 20 } };
-    const params = { current: before, profiles: [before, after], jev: choice(after), contextTokens: 1000 };
+    const params = { current: before, profiles: [before, after], jev: choice(after), cachedPrefixTokens: 1000 };
     assert.equal(decide(params).profile, before);
     assert.match(decide(params).reason, /cache-savings-unmeasured/);
     assert.equal(decide({ ...params, hasPriorModel: false }).profile, after);
-    assert.equal(decide({ ...params, contextTokens: 0 }).profile, after);
+    assert.equal(decide({ ...params, cachedPrefixTokens: 0, contextTokens: 1000000 }).profile, after);
     assert.equal(decide({ ...params, current: after, jev: choice(before, 0.1) }).profile, before);
   }
 });
@@ -105,15 +126,15 @@ test("effort reductions account for cache rebuilding without blocking deeper rea
     rates: { cachedInput: 0.4, cacheWrite: 5 } };
   const light = { ...weaker, rates: deep.rates };
   const params = { ...base, current: deep, profiles: [deep, light], jev: choice(light) };
-  assert.equal(decide({ ...params, contextTokens: 1000 }).profile, light);
-  const held = decide({ ...params, contextTokens: 200000 });
+  assert.equal(decide({ ...params, cachedPrefixTokens: 1000 }).profile, light);
+  const held = decide({ ...params, cachedPrefixTokens: 200000 });
   assert.equal(held.profile, deep);
   assert.match(held.reason, /effort-change-not-worth-cache-rebuild/);
-  const up = decide({ ...params, current: light, jev: choice(deep, 0.1), contextTokens: 200000 });
+  const up = decide({ ...params, current: light, jev: choice(deep, 0.1), cachedPrefixTokens: 200000 });
   assert.equal(up.profile, deep);
   const tied = { ...light, benchmark: { ...light.benchmark, intelligence: deep.benchmark.intelligence } };
-  assert.equal(decide({ ...params, profiles: [deep, tied], jev: choice(tied), contextTokens: 200000 }).profile, deep);
-  assert.equal(decide({ ...params, profiles: [deep, tied], jev: choice(tied, 0.1), contextTokens: 0 }).profile, deep);
+  assert.equal(decide({ ...params, profiles: [deep, tied], jev: choice(tied), cachedPrefixTokens: 200000 }).profile, deep);
+  assert.equal(decide({ ...params, profiles: [deep, tied], jev: choice(tied, 0.1), cachedPrefixTokens: 0 }).profile, deep);
 });
 
 test("continuations can upgrade before failures, and lower only after difficult work is complete", () => {
@@ -130,7 +151,7 @@ test("continuations can upgrade before failures, and lower only after difficult 
   assert.equal(decide({ ...params, jev: { ...choice(weaker, 0.1), assessment } }).profile, current);
   const expensive = { ...current, rates: { cachedInput: 0, cacheWrite: 5 } };
   const light = { ...weaker, rates: expensive.rates };
-  assert.equal(decide({ ...params, current: expensive, profiles: [expensive, light], contextTokens: 1000000,
+  assert.equal(decide({ ...params, current: expensive, profiles: [expensive, light], cachedPrefixTokens: 1000000,
     jev: { ...choice(light), assessment } }).profile, expensive);
 });
 

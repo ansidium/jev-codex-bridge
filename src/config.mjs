@@ -19,7 +19,7 @@ export const availableTiers = () =>
   TIER_NAMES.filter((n) => n !== "fable" || process.env.JEV_ALLOW_FABLE !== "0");
 
 export const THRESHOLDS = {
-  /** An uncertain answer cannot lower an established capability level. */
+  /** An uncertain answer cannot lower the current or cold-start fallback capability. */
   minConfidence: 0.3,
   /**
    * Per-attempt Jev HTTP timeout and the hard wall-clock deadline for the whole routing
@@ -122,7 +122,8 @@ export const questionForProfiles = (profiles) =>
       profiles.map(({ id, model, effort, contextWindow, reasoningFamily, benchmark, rates, onFrontier }) => [
         id,
         { model, effort: effort ?? "Model default", context_window: contextWindow, reasoning_family: reasoningFamily,
-          ...(benchmark ? { benchmark, on_price_quality_frontier: onFrontier } : { benchmark: "Not measured" }),
+          ...(benchmark ? { benchmark: { intelligence: benchmark.intelligence, costPerTaskUSD: benchmark.costPerTaskUSD },
+            on_price_quality_frontier: onFrontier } : { benchmark: "Not measured" }),
           ...(rates ? { usd_per_million_tokens: rates } : {}) },
       ]),
     ),
