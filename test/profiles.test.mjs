@@ -11,6 +11,29 @@ const catalog = new Map([
   ["gpt-6-astra", { slug: "gpt-6-astra", supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max", "ultra"]) }],
 ]);
 
+test("GPT-6 defaults use their own evidence and catalog effort capabilities", () => {
+  assert.deepEqual(codexModels().map(model => model.id),
+    ["gpt-6-luna", "gpt-5.6-terra", "gpt-6-sol", "gpt-6-astra"]);
+  const models = new Map([
+    ["jev-router", catalog.get("jev-router")],
+    ["gpt-6-sol", { supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max", "ultra"]) }],
+    ["gpt-6-luna", { supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max"]) }],
+  ].map(([slug, info]) => [slug, { slug, ...info }]));
+  const profiles = codexProfiles(codexModels(models), models, "ultra");
+  assert.equal(profiles.find(p => p.id === "gpt-6-sol@max").benchmark.intelligence, 48);
+  assert.equal(profiles.find(p => p.id === "gpt-6-luna@medium").benchmark.intelligence, 29);
+  assert(profiles.some(p => p.id === "gpt-6-sol@ultra" && !p.benchmark));
+  assert(!profiles.some(p => p.id === "gpt-6-luna@ultra"));
+  for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
+    const low = profiles.find(p => p.id === `${model}@low`);
+    assert.equal(low.benchmark.costPerTaskUSD, undefined);
+    assert.equal(low.reasoningFamily, "gpt-6");
+    assert.equal(low.rates.input, model === "gpt-6-sol" ? 2 : 0.1);
+  }
+  const long = codexProfiles(codexModels(models), models, "low", 272001);
+  assert.deepEqual(long.map(p => p.rates.output), [15, 0.75]);
+});
+
 test("joint candidates respect the user ceiling and each model's actual capabilities", () => {
   const models = codexModels(catalog);
   const low = codexProfiles(models, catalog, "low");
@@ -47,6 +70,8 @@ test("frontier is advisory: ties, unmeasured efforts and specialized choices rem
   assert(frontier.some(p => p.id === "gpt-6-astra@xhigh"));
   const unknown = { id: "future@deep" };
   assert(frontierProfiles([...profiles, unknown]).includes(unknown));
+  const missingCost = { id: "future@low", benchmark: { intelligence: 100 } };
+  assert.deepEqual(frontierProfiles([profiles[0], missingCost]), [profiles[0], missingCost]);
 });
 
 test("published observations have provenance and finite nonnegative measurements", () => {
@@ -56,7 +81,11 @@ test("published observations have provenance and finite nonnegative measurements
     assert.match(model.source, /^https:\/\//);
     for (const observation of Object.values(model.efforts)) {
       assert(Number.isFinite(observation.intelligence) && observation.intelligence >= 0);
-      assert(Number.isFinite(observation.costPerTaskUSD) && observation.costPerTaskUSD > 0);
+      assert(Number.isFinite(observation.aaBriefcaseElo));
+      assert(observation.terminalBench4SuccessRate >= 0 && observation.terminalBench4SuccessRate <= 1);
+      if (observation.costPerTaskUSD !== undefined) {
+        assert(Number.isFinite(observation.costPerTaskUSD) && observation.costPerTaskUSD > 0);
+      }
     }
   }
 });

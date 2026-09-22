@@ -23,6 +23,8 @@ test("score rubrics contain API-valid descriptions; pair choices contain measure
   const question = questionForProfiles(profiles);
   assert.deepEqual(Object.keys(question.criteria), profiles.map(profile => profile.id));
   assert.equal(question.criteria[current.id].benchmark.intelligence, 40);
+  const specialized = { ...current, benchmark: { ...current.benchmark, aaBriefcaseElo: 1200, terminalBench4SuccessRate: 0.4 } };
+  assert.deepEqual(questionForProfiles([specialized]).criteria[current.id].benchmark, specialized.benchmark);
 });
 
 test("selects the complete pair, including a same-model effort change", () => {
@@ -68,7 +70,20 @@ test("cache guard uses rates and task-cost difference, not a fixed context limit
 test("unknown measurements do not invent cache savings or cap deeper same-model effort", () => {
   const unmeasured = { ...current, id: "small@new-level", effortIndex: 3, benchmark: undefined };
   assert.equal(decide({ ...base, profiles: [current, unmeasured], jev: choice(unmeasured, 0.2) }).profile, unmeasured);
-  assert.equal(decide({ ...base, current: unmeasured, contextTokens: 900000, jev: choice(weaker) }).profile, weaker);
+  assert.equal(decide({ ...base, current: unmeasured, contextTokens: 900000, jev: choice(weaker) }).profile, unmeasured);
+});
+
+test("unpublished task costs cannot justify cache churn or prevent quality upgrades", () => {
+  for (const missing of ["before", "after", "both"]) {
+    const before = missing === "after" ? current : { ...current, benchmark: { intelligence: 40 } };
+    const after = missing === "before" ? weaker : { ...weaker, benchmark: { intelligence: 20 } };
+    const params = { current: before, profiles: [before, after], jev: choice(after), contextTokens: 1000 };
+    assert.equal(decide(params).profile, before);
+    assert.match(decide(params).reason, /cache-savings-unmeasured/);
+    assert.equal(decide({ ...params, hasPriorModel: false }).profile, after);
+    assert.equal(decide({ ...params, contextTokens: 0 }).profile, after);
+    assert.equal(decide({ ...params, current: after, jev: choice(before, 0.1) }).profile, before);
+  }
 });
 
 test("model names in classifier output cannot bypass policy or veto the selected pair", () => {

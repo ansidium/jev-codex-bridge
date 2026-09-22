@@ -1,16 +1,16 @@
 {
-  "asOf": "2026-09-19",
+  "asOf": "2026-09-23",
   "benchmark": {
-    "name": "Artificial Analysis Intelligence Index v4.3",
+    "name": "Artificial Analysis Intelligence Index v4.3.2",
     "methodology": "https://artificialanalysis.ai/methodology/intelligence-benchmarking",
     "costUnit": "USD per benchmark task",
     "costIncludes": ["input", "cache reads", "cache writes", "reasoning output", "answer output"],
-    "limitations": "Rounded aggregate scores from primarily English-language tasks; not a guarantee of task success or a Codex usage forecast."
+    "limitations": "Rounded aggregate scores from primarily English-language tasks; not a guarantee of task success or a Codex usage forecast. Missing task costs are unpublished, not zero; token rates alone do not establish total task cost."
   },
   "pricing": {
     "source": "https://developers.openai.com/api/docs/pricing",
     "unit": "USD per million tokens, Standard API processing",
-    "solPromotionThrough": "2026-11-21"
+    "gpt56SolPromotionThrough": "2026-11-21"
   },
   "reasoningSource": "https://developers.openai.com/api/docs/guides/reasoning",
   "fallbackEffortOrder": ["none", "low", "medium", "high", "xhigh", "max", "ultra"],
@@ -23,11 +23,11 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
         "rates": { "input": 0.40, "cachedInput": 0.04, "cacheWrite": 0.50, "output": 1.80 } },
       "efforts": {
-        "low": { "intelligence": 22, "costPerTaskUSD": 0.01 },
-        "medium": { "intelligence": 25, "costPerTaskUSD": 0.02 },
-        "high": { "intelligence": 32, "costPerTaskUSD": 0.04 },
-        "xhigh": { "intelligence": 35, "costPerTaskUSD": 0.09 },
-        "max": { "intelligence": 38, "costPerTaskUSD": 0.18 }
+        "low": { "intelligence": 21, "costPerTaskUSD": 0.01, "aaBriefcaseElo": 737.92, "terminalBench4SuccessRate": 0.0000 },
+        "medium": { "intelligence": 25, "costPerTaskUSD": 0.02, "aaBriefcaseElo": 931.59, "terminalBench4SuccessRate": 0.0051 },
+        "high": { "intelligence": 32, "costPerTaskUSD": 0.04, "aaBriefcaseElo": 1171.47, "terminalBench4SuccessRate": 0.0253 },
+        "xhigh": { "intelligence": 35, "costPerTaskUSD": 0.09, "aaBriefcaseElo": 1267.94, "terminalBench4SuccessRate": 0.0354 },
+        "max": { "intelligence": 37, "costPerTaskUSD": 0.18, "aaBriefcaseElo": 1345.38, "terminalBench4SuccessRate": 0.1162 }
       }
     },
     "gpt-5.6-terra": {
@@ -38,11 +38,11 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
         "rates": { "input": 4.00, "cachedInput": 0.40, "cacheWrite": 5.00, "output": 18.00 } },
       "efforts": {
-        "low": { "intelligence": 28, "costPerTaskUSD": 0.14 },
-        "medium": { "intelligence": 30, "costPerTaskUSD": 0.18 },
-        "high": { "intelligence": 34, "costPerTaskUSD": 0.34 },
-        "xhigh": { "intelligence": 38, "costPerTaskUSD": 0.63 },
-        "max": { "intelligence": 42, "costPerTaskUSD": 1.40 }
+        "low": { "intelligence": 27, "costPerTaskUSD": 0.14, "aaBriefcaseElo": 1013.13, "terminalBench4SuccessRate": 0.0152 },
+        "medium": { "intelligence": 30, "costPerTaskUSD": 0.18, "aaBriefcaseElo": 1040.53, "terminalBench4SuccessRate": 0.0101 },
+        "high": { "intelligence": 34, "costPerTaskUSD": 0.34, "aaBriefcaseElo": 1202.18, "terminalBench4SuccessRate": 0.0152 },
+        "xhigh": { "intelligence": 38, "costPerTaskUSD": 0.63, "aaBriefcaseElo": 1338.71, "terminalBench4SuccessRate": 0.1010 },
+        "max": { "intelligence": 42, "costPerTaskUSD": 1.40, "aaBriefcaseElo": 1335.93, "terminalBench4SuccessRate": 0.3535 }
       }
     },
     "gpt-5.6-sol": {
@@ -53,11 +53,11 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
         "rates": { "input": 8.00, "cachedInput": 0.80, "cacheWrite": 10.00, "output": 30.00 } },
       "efforts": {
-        "low": { "intelligence": 34, "costPerTaskUSD": 0.26 },
-        "medium": { "intelligence": 39, "costPerTaskUSD": 0.50 },
-        "high": { "intelligence": 42, "costPerTaskUSD": 0.81 },
-        "xhigh": { "intelligence": 44, "costPerTaskUSD": 1.18 },
-        "max": { "intelligence": 47, "costPerTaskUSD": 1.99 }
+        "low": { "intelligence": 33, "costPerTaskUSD": 0.26, "aaBriefcaseElo": 1042.55, "terminalBench4SuccessRate": 0.0101 },
+        "medium": { "intelligence": 39, "costPerTaskUSD": 0.50, "aaBriefcaseElo": 1242.59, "terminalBench4SuccessRate": 0.1465 },
+        "high": { "intelligence": 42, "costPerTaskUSD": 0.81, "aaBriefcaseElo": 1369.70, "terminalBench4SuccessRate": 0.2071 },
+        "xhigh": { "intelligence": 44, "costPerTaskUSD": 1.18, "aaBriefcaseElo": 1442.84, "terminalBench4SuccessRate": 0.2475 },
+        "max": { "intelligence": 47, "costPerTaskUSD": 1.99, "aaBriefcaseElo": 1487.42, "terminalBench4SuccessRate": 0.3990 }
       }
     },
     "gpt-6-astra": {
@@ -68,11 +68,43 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
         "rates": { "input": 20.00, "cachedInput": 2.00, "cacheWrite": 25.00, "output": 75.00 } },
       "efforts": {
-        "low": { "intelligence": 46, "costPerTaskUSD": 0.82 },
-        "medium": { "intelligence": 50, "costPerTaskUSD": 1.54 },
-        "high": { "intelligence": 51, "costPerTaskUSD": 1.72 },
-        "xhigh": { "intelligence": 53, "costPerTaskUSD": 2.31 },
-        "max": { "intelligence": 53, "costPerTaskUSD": 3.26 }
+        "low": { "intelligence": 46, "costPerTaskUSD": 0.82, "aaBriefcaseElo": 1260.60, "terminalBench4SuccessRate": 0.4192 },
+        "medium": { "intelligence": 50, "costPerTaskUSD": 1.54, "aaBriefcaseElo": 1459.22, "terminalBench4SuccessRate": 0.4949 },
+        "high": { "intelligence": 51, "costPerTaskUSD": 1.73, "aaBriefcaseElo": 1506.86, "terminalBench4SuccessRate": 0.5404 },
+        "xhigh": { "intelligence": 52, "costPerTaskUSD": 2.31, "aaBriefcaseElo": 1543.68, "terminalBench4SuccessRate": 0.5960 },
+        "max": { "intelligence": 53, "costPerTaskUSD": 3.26, "aaBriefcaseElo": 1568.86, "terminalBench4SuccessRate": 0.5909 }
+      }
+    },
+    "gpt-6-luna": {
+      "reasoningFamily": "gpt-6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-6-luna",
+      "ratesSource": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "rates": { "input": 0.10, "cachedInput": 0.01, "cacheWrite": 0.125, "output": 0.50 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "rates": { "input": 0.20, "cachedInput": 0.02, "cacheWrite": 0.25, "output": 0.75 } },
+      "efforts": {
+        "low": { "intelligence": 21, "aaBriefcaseElo": 724.99, "terminalBench4SuccessRate": 0.0000 },
+        "medium": { "intelligence": 29, "aaBriefcaseElo": 1063.32, "terminalBench4SuccessRate": 0.0253 },
+        "high": { "intelligence": 32, "aaBriefcaseElo": 1176.49, "terminalBench4SuccessRate": 0.0455 },
+        "xhigh": { "intelligence": 34, "aaBriefcaseElo": 1216.68, "terminalBench4SuccessRate": 0.0808 },
+        "max": { "intelligence": 37, "aaBriefcaseElo": 1299.23, "terminalBench4SuccessRate": 0.1263 }
+      }
+    },
+    "gpt-6-sol": {
+      "reasoningFamily": "gpt-6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-6-sol",
+      "ratesSource": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+      "rates": { "input": 2.00, "cachedInput": 0.20, "cacheWrite": 2.50, "output": 10.00 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "rates": { "input": 4.00, "cachedInput": 0.40, "cacheWrite": 5.00, "output": 15.00 } },
+      "efforts": {
+        "low": { "intelligence": 34, "aaBriefcaseElo": 905.16, "terminalBench4SuccessRate": 0.0909 },
+        "medium": { "intelligence": 40, "aaBriefcaseElo": 1142.18, "terminalBench4SuccessRate": 0.1869 },
+        "high": { "intelligence": 43, "aaBriefcaseElo": 1289.24, "terminalBench4SuccessRate": 0.2626 },
+        "xhigh": { "intelligence": 44, "aaBriefcaseElo": 1363.66, "terminalBench4SuccessRate": 0.3030 },
+        "max": { "intelligence": 48, "aaBriefcaseElo": 1482.78, "terminalBench4SuccessRate": 0.4394 }
       }
     }
   }

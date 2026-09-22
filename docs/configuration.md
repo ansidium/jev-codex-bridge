@@ -59,9 +59,9 @@ Before that catalog arrives, the router uses these configurable defaults:
 
 | Variable | Fallback model |
 | --- | --- |
-| `JEV_CODEX_FAST_MODEL` | `gpt-5.6-luna` |
+| `JEV_CODEX_FAST_MODEL` | `gpt-6-luna` |
 | `JEV_CODEX_BALANCED_MODEL` | `gpt-5.6-terra` |
-| `JEV_CODEX_STRONG_MODEL` | `gpt-5.6-sol` |
+| `JEV_CODEX_STRONG_MODEL` | `gpt-6-sol` |
 | `JEV_CODEX_LONG_MODEL` | `gpt-6-astra` |
 
 The last entry is the frontier tier. `JEV_ALLOW_FABLE=0` disables it; the variable
@@ -72,9 +72,12 @@ catalog descriptions are not used as evidence of quality.
 Automatic selection excludes hidden models and models whose catalog metadata
 rejects the request's Responses Lite format. `JEV_CODEX_EXCLUDE_MODELS` excludes
 additional model IDs, separated by commas. Manual model selections pass through.
+For example, `JEV_CODEX_EXCLUDE_MODELS=gpt-5.6-luna` retires the previous Luna
+from automatic selection without removing manual access. GPT-5.6 Sol remains
+eligible when the account catalog exposes it, including its Max profile.
 
 This table lists fallback model IDs, not reasoning levels or selection frequency.
-Model and effort are chosen together. Astra can run at `low`, `medium`, `high`,
+Model and effort are chosen together. GPT-6 Sol and Astra can run at `low`, `medium`, `high`,
 `xhigh`, `max` or `ultra` when those levels are present in the account catalog.
 Luna can use `max` under an Ultra ceiling without receiving an unsupported effort.
 All compatible pairs remain eligible; an aggregate benchmark does not establish

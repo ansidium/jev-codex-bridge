@@ -31,7 +31,8 @@ export function codexProfiles(models, catalog, ceiling, contextTokens = 0, data 
 /** Keep unmeasured pairs and ties: rounded equal scores do not establish dominance. */
 export function frontierProfiles(profiles) {
   return profiles.filter(profile => !profile.benchmark || !profiles.some(other =>
-    other.benchmark && other.benchmark.intelligence > profile.benchmark.intelligence &&
+    Number.isFinite(profile.benchmark.costPerTaskUSD) && Number.isFinite(other.benchmark?.costPerTaskUSD) &&
+    other.benchmark.intelligence > profile.benchmark.intelligence &&
     other.benchmark.costPerTaskUSD <= profile.benchmark.costPerTaskUSD));
 }
 

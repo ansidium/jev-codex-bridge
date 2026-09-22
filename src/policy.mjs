@@ -31,10 +31,13 @@ export function decide({ jev, current, profiles, contextTokens = 0, hasPriorMode
 
   // A possible cache rebuild is compared with benchmark task savings. This is
   // an API-equivalent estimate, not a forecast of the user's Codex allowance.
-  if (hasPriorModel && (downgrade || lowerEffort) && before && after &&
+  if (hasPriorModel && (downgrade || lowerEffort) &&
       chosen.rates && current.rates) {
     const rebuild = contextTokens * Math.max(0, chosen.rates.cacheWrite - current.rates.cachedInput) / 1e6;
-    const saving = before.costPerTaskUSD - after.costPerTaskUSD;
+    if (rebuild > 0 && (!Number.isFinite(before?.costPerTaskUSD) || !Number.isFinite(after?.costPerTaskUSD))) {
+      return settle(current, "cache-savings-unmeasured");
+    }
+    const saving = before?.costPerTaskUSD - after?.costPerTaskUSD;
     if (saving > 0 && rebuild > saving) return settle(current,
       lowerEffort ? "effort-change-not-worth-cache-rebuild" : "downgrade-not-worth-cache-rebuild");
   }

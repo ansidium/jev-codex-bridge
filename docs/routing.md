@@ -8,20 +8,36 @@ choices. Catalog descriptions are omitted from the classification request.
 ## Published observations
 
 [model-profiles.json](../data/model-profiles.json) contains observations dated
-September 19, 2026, with source URLs and units:
+September 23, 2026, with source URLs and units:
 
-- Artificial Analysis Intelligence Index v4.3 scores for each measured effort.
+- Artificial Analysis Intelligence Index v4.3.2 scores for each measured effort.
+- AA-Briefcase v1.1 Elo for professional deliverables and Terminal-Bench 4.0
+  success rates (0 to 1), from the same snapshot, for task-specific comparisons.
 - Weighted cost per benchmark task, which includes input, cache reads and writes,
   reasoning output and answer output.
 - OpenAI Standard API input, cached-input, cache-write and output prices,
   including the published long-context rates.
 - Reasoning-family compatibility from OpenAI's documentation.
 
-Sources: [Luna](https://artificialanalysis.ai/models/releases/gpt-5-6-luna),
+Sources: [GPT-6 Luna](https://artificialanalysis.ai/models/releases/gpt-6-luna),
+[GPT-6 Sol](https://artificialanalysis.ai/models/releases/gpt-6-sol),
+[GPT-5.6 Luna](https://artificialanalysis.ai/models/releases/gpt-5-6-luna),
 [Terra](https://artificialanalysis.ai/models/releases/gpt-5-6-terra),
-[Sol](https://artificialanalysis.ai/models/releases/gpt-5-6-sol),
+[GPT-5.6 Sol](https://artificialanalysis.ai/models/releases/gpt-5-6-sol),
 [Astra](https://artificialanalysis.ai/models/releases/gpt-6-astra),
 [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
+
+At Max, GPT-6 Sol scores 48 versus 47 for GPT-5.6 Sol; both Luna generations
+round to 37. Individual evaluations differ, so this does not establish that the
+new generation wins every task. Standard input/output prices per million tokens
+are $2/$10 for [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)
+and $0.10/$0.50 for [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+AA has not published complete weighted task costs for these two releases in this
+snapshot. Those fields are omitted, and neither model establishes price-quality
+dominance using token prices alone. Previous-generation observations remain for
+manual selections and account catalogs that still expose those models.
+The classifier receives the individual evaluation results alongside the aggregate;
+they do not impose a model preference for particular words or task categories.
 
 The [index methodology](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
 covers ten evaluations across agent tasks, coding, science and general knowledge.
@@ -33,7 +49,7 @@ tasks. They do not establish success probabilities for a particular request.
 The data ship with the package and update through normal reviewed source updates.
 Routing makes no live benchmark-page requests. A new model ID does not inherit
 another model's scores or prices. Unmeasured efforts, including Ultra, remain
-available when the account catalog supports them. Published Sol pricing is
+available when the account catalog supports them. Published GPT-5.6 Sol pricing is
 promotional through at least November 21, 2026; observations need review as
 prices and evaluations change.
 
@@ -74,6 +90,9 @@ For a measured downgrade or a same-model effort reduction, it compares possible
 cache rebuilding with benchmark task savings. This estimate uses approximate context size and
 published rates; it does not predict actual cache hits, future retries, or Codex
 subscription usage. It cannot force a downgrade.
+If a downgrade could incur a cache rebuild but either task cost is unpublished,
+the current pair is retained: missing costs cannot establish savings. This does
+not block an upgrade or a fresh selection without an established model.
 
 ## Continuing work
 
