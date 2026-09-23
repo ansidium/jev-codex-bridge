@@ -318,18 +318,18 @@ test("surfaces routing as a native commentary event", () => {
   assert.match(events, /response\.output_text\.delta/);
   assert.match(events, /response\.output_item\.done/);
   assert.match(events, /"phase":"commentary"/);
-  assert.match(events, /\[jev\] selected gpt-6-sol \(confidence 91%\)/);
+  assert.match(events, /\[jev\] selected gpt-6-sol \(confidence 0\.91\)/);
 
   const base = { model: "catalog-model-id", modelLabel: "Catalog Model", reasoningEffort: "high", confidence: 0.2, reason: "jev" };
   for (const [state, expected] of [
-    [{ hasPriorModel: false, changed: false, reason: "jev/no-change" }, "selected catalog model (high · confidence 20%)"],
-    [{ hasPriorModel: false, changed: true }, "selected catalog model (high · confidence 20%)"],
-    [{ hasPriorModel: true, changed: false, reason: "low-confidence-no-downgrade/no-change" }, "keeping catalog model (high · confidence 20%)"],
-    [{ hasPriorModel: true, changed: true }, "switched to catalog model (high · confidence 20%)"],
+    [{ hasPriorModel: false, changed: false, reason: "jev/no-change" }, "selected catalog model (high · confidence 0.20)"],
+    [{ hasPriorModel: false, changed: true }, "selected catalog model (high · confidence 0.20)"],
+    [{ hasPriorModel: true, changed: false, reason: "low-confidence-no-downgrade/no-change" }, "keeping catalog model (high · confidence 0.20)"],
+    [{ hasPriorModel: true, changed: true }, "switched to catalog model (high · confidence 0.20)"],
     [{ reason: "jev-unavailable/no-change", confidence: null }, "fallback to catalog model (high · confidence n/a)"],
     [{ reason: "jev-unavailable/no-change", confidence: 0.99 }, "fallback to catalog model (high · confidence n/a)"],
-    [{ confidence: 0 }, "selected catalog model (high · confidence 0%)"],
-    [{ confidence: 0.856 }, "selected catalog model (high · confidence 86%)"],
+    [{ confidence: 0 }, "selected catalog model (high · confidence 0.00)"],
+    [{ confidence: 0.856 }, "selected catalog model (high · confidence 0.86)"],
   ]) {
     const wire = jevDecisionEvents({ ...base, ...state });
     const event = wire.split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));

@@ -72,10 +72,11 @@ previous assignment from anchoring its recommendation. The bridge keeps that
 pair locally for fallback, downgrade checks and explanations.
 
 The commentary line uses the catalog's model label in lowercase, for example:
-`[jev] keeping gpt-6 astra (high · confidence 20%)`.
+`[jev] keeping gpt-6 astra (high · confidence 0.20)`.
 `selected` marks an initial choice, `keeping` preserves an established pair,
 `switched to` changes the model or effort, and `fallback to` means Jev was
-unavailable. Confidence is the classifier's recommendation confidence, including
+unavailable. Confidence uses its original 0-1 scale with two decimal places.
+It is the classifier's recommendation confidence, including
 when policy keeps a different pair; it is not answer accuracy. Unavailable
 confidence is shown as `n/a`. Full policy reasons remain in `$jev-explain`.
 

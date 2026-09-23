@@ -129,7 +129,7 @@ export function jevDecisionEvents({ tier, model = codexModelOf(tier), modelLabel
   confidence, reason, reasoningEffort, hasPriorModel = false, changed = false }) {
   const unavailable = reason.startsWith("jev-unavailable");
   const action = unavailable ? "fallback to" : !hasPriorModel ? "selected" : changed ? "switched to" : "keeping";
-  const certainty = !unavailable && Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "n/a";
+  const certainty = !unavailable && Number.isFinite(confidence) ? confidence.toFixed(2) : "n/a";
   const detail = [reasoningEffort?.toLowerCase(), `confidence ${certainty}`].filter(Boolean).join(" · ");
   const id = `jev-${randomUUID()}`;
   const text = `[jev] ${action} ${modelLabel.toLowerCase()} (${detail})`;
