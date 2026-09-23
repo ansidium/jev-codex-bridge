@@ -148,7 +148,7 @@ test("continuations can upgrade before failures, and lower only after difficult 
   }
   const assessment = { workStatus: { choice: "complete", confidence: 0.99 }, reasoningGain: { choice: "routine", confidence: 0.99 } };
   assert.equal(decide({ ...params, jev: { ...choice(weaker), assessment } }).profile, weaker);
-  assert.equal(decide({ ...params, jev: { ...choice(weaker, 0.1), assessment } }).profile, current);
+  assert.equal(decide({ ...params, jev: { ...choice(weaker, 0.1), assessment } }).profile, weaker);
   const expensive = { ...current, rates: { cachedInput: 0, cacheWrite: 5 } };
   const light = { ...weaker, rates: expensive.rates };
   assert.equal(decide({ ...params, current: expensive, profiles: [expensive, light], cachedPrefixTokens: 1000000,

@@ -60,7 +60,7 @@ Codex Desktop / CLI
   model-and-effort pairs, with quality first and your reasoning selection as a ceiling.
 - Keeps the chosen pair through tool calls, with a checked upgrade if repeated
   failures reveal a reasoning blocker.
-- Keeps the current pair if Jev is unavailable; low confidence prevents a downgrade.
+- Keeps the current pair if Jev is unavailable; uncertain reductions require confidently completed, routine work.
 
 Run `$jev-explain` in Codex to inspect the latest decision.
 See [selection policy and benchmark sources](docs/routing.md).

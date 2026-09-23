@@ -10,10 +10,33 @@ export function cachePrefix(body, count = codexInputItems(body).length) {
     .update(JSON.stringify({ ...fields, input: codexInputItems(body).slice(0, count) })).digest("hex") };
 }
 
+function matchesPrefix(body, prefix) {
+  return Number.isSafeInteger(prefix?.items) && prefix.items >= 0 &&
+    codexInputItems(body).length >= prefix.items && cachePrefix(body, prefix.items).hash === prefix.hash;
+}
+
 export function reusableCacheTokens(body, cache) {
-  if (!Number.isSafeInteger(cache?.items) || cache.items < 0 || !Number.isSafeInteger(cache.tokens) || cache.tokens < 0 ||
-      codexInputItems(body).length < cache.items || cachePrefix(body, cache.items).hash !== cache.hash) return 0;
-  return cache.tokens;
+  return Number.isSafeInteger(cache?.tokens) && cache.tokens >= 0 && matchesPrefix(body, cache) ? cache.tokens : 0;
+}
+
+/** Measured input covers opaque history; only the added content needs estimation. */
+export function estimateContext(body, previous) {
+  const measured = Number.isSafeInteger(previous?.usage?.inputTokens) && previous.usage.inputTokens >= 0 &&
+    matchesPrefix(body, previous.cache);
+  const input = codexInputItems(body).slice(measured ? previous.cache.items : 0);
+  let unmeasuredContent = false;
+  // Ciphertext, media URLs and file payload sizes are not model token counts.
+  const visible = JSON.stringify({ ...(measured ? {} : { instructions: body.instructions, tools: body.tools }), input },
+    (key, value) => {
+      if ((key === "encrypted_content" && value) ||
+          ["input_image", "input_audio", "input_file", "compaction"].includes(value?.type)) {
+        unmeasuredContent = true;
+        return undefined;
+      }
+      return value;
+    });
+  return { tokens: (measured ? previous.usage.inputTokens : 0) + (input.length || !measured ? Math.round(visible.length / 4) : 0),
+    source: measured ? "usage-prefix" : "text-estimate", unmeasuredContent };
 }
 
 export function measuredUsage(usage) {

@@ -67,9 +67,9 @@ independent of these assessments.
 [TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
 independently; it does not run the candidate models or verify their answers.
 
-The classifier does not receive the previously selected pair. This prevents the
-previous assignment from anchoring its recommendation. The bridge keeps that
-pair locally for fallback, downgrade checks and explanations.
+The classifier does not receive the previously selected pair as a separate
+state field; earlier assignments can still appear in conversation history.
+The bridge keeps the pair locally for fallback, downgrade checks and explanations.
 
 The commentary line uses the catalog's model label in lowercase, replacing
 hyphens before words with spaces while preserving numeric versions, for example:
@@ -94,7 +94,10 @@ prove equal capability, and specialized strengths may differ from the aggregate.
 No model is removed solely for being off that frontier.
 
 The bridge keeps the current pair, including the cold-start fallback, when a
-proposed reduction or an unproven capability change has low confidence. It does
+proposed reduction or an unproven capability change has low confidence, unless
+both independent assessments confidently identify completed substantive work
+and only routine execution or reporting remaining. Ambiguity among many pairs
+alone does not veto that recommendation; cache protection still applies. It does
 not cap an upgrade to save money. Effort order comes from the account catalog.
 For an unmeasured effort, measured levels of the same model bound a comparison:
 if a lower effort already exceeds the current pair, a higher effort can upgrade.
@@ -115,6 +118,14 @@ Compaction or a changed prefix invalidates reuse; the bridge does not estimate
 partially reusable prefixes from JSON length. Missing usage is unknown, not a
 measured zero or evidence of a hot cache. Failed and interrupted responses do
 not establish cache measurements, and older responses cannot overwrite newer ones.
+Context size uses measured input tokens when this same prefix check succeeds,
+including requests with zero cache hits, and estimates only the appended text.
+Without a matching measurement it estimates visible input, instructions and tool
+schemas. Ciphertext and media payload lengths do not count as text tokens.
+Diagnostics and the classifier receive the estimate's source and an explicit flag
+when added opaque content has an unknown token count. This remains an estimate,
+including for price-tier selection, rather than an
+[exact preflight token count](https://developers.openai.com/api/docs/guides/token-counting).
 The estimate uses published rates; it does not predict future cache hits, cache
 expiry, retries or Codex subscription usage. It cannot force a downgrade.
 If rebuilding that measured prefix costs more than retaining it but task costs

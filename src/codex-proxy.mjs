@@ -9,7 +9,7 @@ import { decide } from "./policy.mjs";
 import { codexProfiles, fallbackProfile, frontierProfiles, PROFILE_DATA } from "./profiles.mjs";
 import { log } from "./log.mjs";
 import { codexStatusId, readStatus, writeDecision, writeStatus } from "./status.mjs";
-import { cachePrefix, observeUsage, reusableCacheTokens } from "./response-usage.mjs";
+import { cachePrefix, estimateContext, observeUsage, reusableCacheTokens } from "./response-usage.mjs";
 
 const CHATGPT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 const API_BASE_URL = "https://api.openai.com/v1";
@@ -233,7 +233,9 @@ export async function startCodexProxy({
             const candidates = codexModels(models, responsesLite).filter((model) =>
               model.tier !== "fable" || availableTiers().includes("fable"),
             );
-            const contextTokens = Math.round(JSON.stringify(body.input ?? []).length / 4);
+            const contextEstimate = estimateContext(previous ? { ...body, model: previous.model,
+              reasoning: { ...body.reasoning, effort: previous.reasoningEffort } } : body, previous);
+            const contextTokens = contextEstimate.tokens;
             const profiles = codexProfiles(candidates, models, body.reasoning?.effort, contextTokens);
             if (!profiles.length) {
               res.writeHead(503, { "content-type": "application/json" });
@@ -255,7 +257,7 @@ export async function startCodexProxy({
             if (isTurn && routingPrompt && changed && !explaining) {
               const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
               const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
-              const jev = await route({ prompt: routingPrompt, current, contextTokens, profiles: options,
+              const jev = await route({ prompt: routingPrompt, current, contextTokens, contextEstimate, profiles: options,
                 previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation });
               const cachedPrefixTokens = reusableCacheTokens({ ...body, model: current.model,
                 reasoning: { ...body.reasoning, effort: current.effort } }, previous?.cache);
@@ -284,6 +286,7 @@ export async function startCodexProxy({
                 assessment: jev?.assessment ?? null,
                 reason: decision.reason,
                 cachedPrefixTokens,
+                contextEstimate,
                 jev: jev ? { request: jev.request, response: jev.response } : null,
                 at: Date.now(),
               };

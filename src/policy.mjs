@@ -32,18 +32,17 @@ export function decide({ jev, current, profiles, cachedPrefixTokens = 0, hasPrio
   const change = capabilityChange(current, chosen, [...profiles, current]);
   const lowerEffort = chosen.model === current.model && chosen.effortIndex < current.effortIndex;
   const protect = chosen.id !== current.id && change !== 1;
-  if (continuation && protect) {
-    const progress = jev.assessment?.workStatus;
-    const gain = jev.assessment?.reasoningGain;
-    if (!(progress?.choice === "complete" && progress.confidence >= THRESHOLDS.minConfidence &&
-          gain?.choice === "routine" && gain.confidence >= THRESHOLDS.minConfidence)) {
-      return settle(current, "continuation-work-not-complete");
-    }
+  const confident = (answer, expected) => answer?.choice === expected && Number.isFinite(answer.confidence) &&
+    answer.confidence >= THRESHOLDS.minConfidence && answer.confidence <= 1;
+  const finishedRoutine = confident(jev.assessment?.workStatus, "complete") && confident(jev.assessment?.reasoningGain, "routine");
+  if (continuation && protect && !finishedRoutine) {
+    return settle(current, "continuation-work-not-complete");
   }
   if (protect && jev.assessment?.reasoningGain?.choice === "unknown") {
     return settle(current, "unknown-reasoning-no-downgrade");
   }
-  if (protect && jev.confidence < THRESHOLDS.minConfidence) {
+  // Uncertainty among many pairs need not imply uncertainty about finished work.
+  if (protect && jev.confidence < THRESHOLDS.minConfidence && !finishedRoutine) {
     return settle(current, "low-confidence-no-downgrade");
   }
 
