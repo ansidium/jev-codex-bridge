@@ -318,7 +318,7 @@ test("surfaces routing as a native commentary event", () => {
   assert.match(events, /response\.output_text\.delta/);
   assert.match(events, /response\.output_item\.done/);
   assert.match(events, /"phase":"commentary"/);
-  assert.match(events, /\[jev\] selected gpt-6-sol \(confidence 0\.91\)/);
+  assert.match(events, /\[jev\] selected gpt-6 sol \(confidence 0\.91\)/);
 
   const base = { model: "catalog-model-id", modelLabel: "Catalog Model", reasoningEffort: "high", confidence: 0.2, reason: "jev" };
   for (const [state, expected] of [

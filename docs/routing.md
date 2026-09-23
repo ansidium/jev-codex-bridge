@@ -71,7 +71,8 @@ The classifier does not receive the previously selected pair. This prevents the
 previous assignment from anchoring its recommendation. The bridge keeps that
 pair locally for fallback, downgrade checks and explanations.
 
-The commentary line uses the catalog's model label in lowercase, for example:
+The commentary line uses the catalog's model label in lowercase, replacing
+hyphens before words with spaces while preserving numeric versions, for example:
 `[jev] keeping gpt-6 astra (high · confidence 0.20)`.
 `selected` marks an initial choice, `keeping` preserves an established pair,
 `switched to` changes the model or effort, and `fallback to` means Jev was
