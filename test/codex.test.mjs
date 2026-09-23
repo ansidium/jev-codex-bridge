@@ -318,16 +318,24 @@ test("surfaces routing as a native commentary event", () => {
   assert.match(events, /response\.output_text\.delta/);
   assert.match(events, /response\.output_item\.done/);
   assert.match(events, /"phase":"commentary"/);
-  assert.match(events, /\[Jev\] routed this turn to gpt-6-sol/);
-  assert.match(events, /confidence 0\.91/);
+  assert.match(events, /\[jev\] selected gpt-6-sol \(confidence 91%\)/);
 
-  const unavailable = jevDecisionEvents({
-    tier: "sonnet",
-    confidence: null,
-    reason: "jev-unavailable/no-change",
-  });
-  assert.match(unavailable, /JEV_API_KEY=\.\.\. to ~\/\.jev-router\.env/);
-  assert.match(unavailable, /using gpt-5\.6-terra/);
+  const base = { model: "catalog-model-id", modelLabel: "Catalog Model", reasoningEffort: "high", confidence: 0.2, reason: "jev" };
+  for (const [state, expected] of [
+    [{ hasPriorModel: false, changed: false, reason: "jev/no-change" }, "selected catalog model (high · confidence 20%)"],
+    [{ hasPriorModel: false, changed: true }, "selected catalog model (high · confidence 20%)"],
+    [{ hasPriorModel: true, changed: false, reason: "low-confidence-no-downgrade/no-change" }, "keeping catalog model (high · confidence 20%)"],
+    [{ hasPriorModel: true, changed: true }, "switched to catalog model (high · confidence 20%)"],
+    [{ reason: "jev-unavailable/no-change", confidence: null }, "fallback to catalog model (high · confidence n/a)"],
+    [{ reason: "jev-unavailable/no-change", confidence: 0.99 }, "fallback to catalog model (high · confidence n/a)"],
+    [{ confidence: 0 }, "selected catalog model (high · confidence 0%)"],
+    [{ confidence: 0.856 }, "selected catalog model (high · confidence 86%)"],
+  ]) {
+    const wire = jevDecisionEvents({ ...base, ...state });
+    const event = wire.split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)));
+    assert.equal(event[1].delta, `[jev] ${expected}`);
+    assert.equal(event[2].item.content[0].text, event[1].delta);
+  }
 });
 
 test("proxy preserves Codex auth, picker, routing, and native decision output", async (t) => {
@@ -421,8 +429,10 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   assert.equal(readStatus(statusId).jev.request.state.request, "use sol to debug this race");
   assert.equal(readStatus(statusId).history.length, 1);
   assert.equal(readStatus(statusId).metrics.reasoningRequired, 0.91);
-  assert(response.indexOf("response.created") < response.indexOf("[Jev] routed this turn"));
-  assert(response.indexOf("[Jev] routed this turn") < response.indexOf("response.completed"));
+  assert.equal(readStatus(statusId).hasPriorModel, false);
+  assert.equal(readStatus(statusId).modelLabel, "GPT-5.6-Sol");
+  assert(response.indexOf("response.created") < response.indexOf("[jev] selected"));
+  assert(response.indexOf("[jev] selected") < response.indexOf("response.completed"));
 
   await fetch(`http://127.0.0.1:${port}/responses`, {
     method: "POST",

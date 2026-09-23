@@ -71,6 +71,14 @@ The classifier does not receive the previously selected pair. This prevents the
 previous assignment from anchoring its recommendation. The bridge keeps that
 pair locally for fallback, downgrade checks and explanations.
 
+The commentary line uses the catalog's model label in lowercase, for example:
+`[jev] keeping gpt-6 astra (high · confidence 20%)`.
+`selected` marks an initial choice, `keeping` preserves an established pair,
+`switched to` changes the model or effort, and `fallback to` means Jev was
+unavailable. Confidence is the classifier's recommendation confidence, including
+when policy keeps a different pair; it is not answer accuracy. Unavailable
+confidence is shown as `n/a`. Full policy reasons remain in `$jev-explain`.
+
 For a guaranteed model and effort, use Codex's model picker or CLI options.
 Manual selections pass through without classification. While Jev Router is
 selected, the prompt is evidence for automatic routing, including any stated

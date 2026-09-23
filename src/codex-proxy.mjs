@@ -125,13 +125,14 @@ export const upstreamFor = (
   apiBaseURL = API_BASE_URL,
 ) => /\/models(?:\?|$)/.test(path) || headers["chatgpt-account-id"] ? chatgptBaseURL : apiBaseURL;
 
-export function jevDecisionEvents({ tier, model = codexModelOf(tier), confidence, reason, reasoningEffort }) {
-  const detail = (confidence == null ? reason : `${reason}, confidence ${confidence.toFixed(2)}`) +
-    (reasoningEffort ? `, effort ${reasoningEffort}` : "");
+export function jevDecisionEvents({ tier, model = codexModelOf(tier), modelLabel = model,
+  confidence, reason, reasoningEffort, hasPriorModel = false, changed = false }) {
+  const unavailable = reason.startsWith("jev-unavailable");
+  const action = unavailable ? "fallback to" : !hasPriorModel ? "selected" : changed ? "switched to" : "keeping";
+  const certainty = !unavailable && Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "n/a";
+  const detail = [reasoningEffort?.toLowerCase(), `confidence ${certainty}`].filter(Boolean).join(" · ");
   const id = `jev-${randomUUID()}`;
-  const text = reason.startsWith("jev-unavailable")
-    ? `[Jev] unavailable; using ${model}. Add JEV_API_KEY=... to ~/.jev-router.env and restart jev-codex.`
-    : `[Jev] routed this turn to ${model} (${detail}).`;
+  const text = `[jev] ${action} ${modelLabel.toLowerCase()} (${detail})`;
   const item = {
     type: "message",
     role: "assistant",
@@ -269,8 +270,11 @@ export async function startCodexProxy({
                 trigger: continuation ? "context-change" : "user",
                 previousModel: current.model,
                 previousReasoningEffort: current.effort,
+                hasPriorModel: Boolean(priorModel),
+                changed: decision.changed,
                 tier: selected.tier,
                 model: selected.model,
+                modelLabel: models.get(selected.model)?.display_name ?? selected.model,
                 profile: selected.id,
                 evidence: { asOf: PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
                   measurement: selected.benchmark ?? null },
