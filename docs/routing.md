@@ -1,253 +1,127 @@
-# Routing evidence
+# Routing
 
-Jev selects one supported model-and-effort pair for each new user turn and
-reassesses when task evidence changes during a continuation. The
-selection instruction puts reliable completion first, then cost among capable
-choices. Catalog descriptions are omitted from the classification request.
-The optional model allowlist restricts automatic choices before pairs, fallback
-and cache safeguards are evaluated. With `JEV_CODEX_INCLUDE_MODELS=gpt-6.1-sol,gpt-6-astra`,
-only those two models and their supported efforts are considered. Historical
-observations do not add excluded models back into routing.
+Jev selects a supported model-and-effort pair for the remaining authorized work.
+The bridge applies confidence, continuation and cache safeguards before
+forwarding the Codex request.
 
-## Published observations
+## Selection
 
-[model-profiles.json](../data/model-profiles.json) contains observations dated
-September 30, 2026, with source URLs and units:
+The current request, relevant history and tool results define the work.
+Approval or "continue" inherits unfinished work. Explicit pauses, cancellations
+and replacement tasks change the scope; completed work adds no difficulty.
+Executing a specified plan can still require reasoning and correctness checks.
 
-- Artificial Analysis Intelligence Index v4.3.2 scores for each measured effort.
-- AA-Briefcase v1.1 Elo for professional deliverables and Terminal-Bench 4.0
-  success rates (0 to 1), retained in the source snapshot for research.
-- Weighted cost per benchmark task, which includes input, cache reads and writes,
-  reasoning output and answer output.
-- OpenAI Standard API input, cached-input, cache-write and output prices,
-  including the published long-context rates.
-- Reasoning-family compatibility from OpenAI's documentation.
+All six questions share one TypeSafe request: pair selection, task complexity,
+reasoning complexity, tool complexity, remaining reasoning and work status.
+The diagnostics are independent assessments, not a weighted selection formula.
 
-Sources: [GPT-6 Luna](https://artificialanalysis.ai/models/releases/gpt-6-luna),
-[GPT-6.1 Sol](https://artificialanalysis.ai/models/releases/gpt-6-1-sol),
-[GPT-6 Sol](https://artificialanalysis.ai/models/releases/gpt-6-sol),
-[GPT-5.6 Luna](https://artificialanalysis.ai/models/releases/gpt-5-6-luna),
-[Terra](https://artificialanalysis.ai/models/releases/gpt-5-6-terra),
-[GPT-5.6 Sol](https://artificialanalysis.ai/models/releases/gpt-5-6-sol),
-[Astra](https://artificialanalysis.ai/models/releases/gpt-6-astra),
-[OpenAI pricing](https://developers.openai.com/api/docs/pricing).
+Each pair includes catalog capabilities, observed intelligence, measured task
+cost and API rates. Jev prioritizes reliable completion, then cost among capable
+pairs. Catalog descriptions are not quality evidence.
+The [configured allowlist](configuration.md#model-policy) limits eligible models;
+Codex's reasoning selection sets the effort ceiling. Manual selections bypass
+classification.
 
-At Max, GPT-6.1 Sol scores 52 versus 48 for GPT-6 Sol and 47 for GPT-5.6 Sol;
-both Luna generations round to 37. Individual evaluations differ, so this does not establish that the
-new generation wins every task. Standard input/output prices per million tokens
-are $2/$10 for [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
-and $0.10/$0.50 for [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
-GPT-6.1 Sol cache reads cost $0.10 per million tokens, versus $0.20 for GPT-6 Sol.
-This snapshot includes the newly published weighted task costs for GPT-6 Sol and
-Luna as well as GPT-6.1 Sol. Previous-generation observations remain for
-manual selections and account catalogs that still expose those models.
-The classifier receives the aggregate intelligence score and measured task cost.
-Individual evaluation results remain in the source data and diagnostics. Feeding
-all of their different scales into the same choice biased a controlled comparison
-toward Astra even on routine tasks; no task-word rules compensate for that bias.
+Unmeasured efforts remain eligible. Measured efforts of the same model bound
+capability comparisons; missing scores or prices are not copied from other
+models. Equal rounded scores do not prove an upgrade. The price-quality frontier
+is advisory and does not remove candidates.
 
-The [index methodology](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
-covers ten evaluations across agent tasks, coding, science and general knowledge.
-Evaluations differ in task count, repetitions and weight. Weighted task cost is
-not a raw token price, a cost per successful task, or total evaluation cost
-divided by one common task count. Scores are rounded and mostly reflect English
-tasks. They do not establish success probabilities for a particular request.
+## Safeguards
 
-The data ship with the package and update through normal reviewed source updates.
-Routing makes no live benchmark-page requests. A new model ID does not inherit
-another model's scores or prices. Unmeasured efforts, including Ultra, remain
-available when the account catalog supports them. Published GPT-5.6 Sol pricing is
-promotional through at least November 21, 2026; observations need review as
-prices and evaluations change.
+- If Jev fails or returns an invalid choice, keep the current eligible pair or
+  initial fallback.
+- Low-confidence reductions or uncertain capability changes keep the current
+  pair unless separate assessments confidently establish completed, routine work.
+- Unknown remaining reasoning prevents those reductions.
+- During a continuation, those changes require both completed work and routine
+  remaining steps, even with a confident pair recommendation.
+- Quality upgrades remain eligible regardless of estimated cache cost.
 
-## How evidence affects a decision
+A short status request can be routine; a short correctness question can be hard.
+No prompt phrase forces a model or bypasses these checks.
 
-Jev receives the supported pairs, measurements, context size and
-task history with tool evidence. It chooses a pair and separately assesses task,
-reasoning and tool complexity, useful remaining reasoning, and the cause of any
-blocker. These diagnostics do not form a weighted pricing formula. The remaining
-reasoning assessment distinguishes routine steps from difficult reviews; it
-does not impose a cheap-model ceiling. The pair-selection question remains
-independent of these assessments.
-An already specified approach can still require reasoning to execute interacting
-rules and verify the result. Routine work means directly observable reporting or
-an elementary transformation, not every short or fully specified request.
-The pair question compares first-pass reliability before price: a cheaper pair
-is preferred only when its expected reliability for that work is comparable to
-stronger measured pairs. This is a qualitative instruction, without model floors
-or a task-word classifier.
-[TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
-independently; it does not run the candidate models or verify their answers.
+## Cache and context
 
-All six questions share one TypeSafe request. Each pair retains its full
-capabilities, prices and measurements. A shared model table or removal of the
-state's candidate list reduced tokens but regressed independently checked
-answers, so those representations are not used. Task constraints and diagnostic
-coverage are kept; input savings come from excluding identified router notices
-and pairs outside the configured model allowlist.
+Only completed Responses usage establishes observed input, cache-read,
+cache-write, output and reasoning-token counts. Failed or interrupted responses
+do not establish usage, and older completions cannot overwrite newer state.
 
-The classifier does not receive the previously selected pair as a separate
-state field. New bridge notices have standard `msg_jev-` message IDs, which Codex
-preserves. Identified assistant commentary notices are omitted from classifier
-context, including full mode; user quotations and other messages remain.
-Older notices without those IDs can still appear in conversation history.
-The generation history sent to OpenAI is unchanged.
-The bridge keeps the pair locally for fallback, downgrade checks and explanations.
+Cache reuse requires the same input prefix, instructions, tools, model, effort
+and cache-affecting settings. Per-turn client metadata is ignored. The persisted
+prefix record contains a hash and item count, not another copy of the input.
+Compaction or other prefix changes invalidate reuse.
 
-The commentary line uses the catalog's model label in lowercase, replacing
-hyphens before words with spaces while preserving numeric versions, for example:
-`[jev] keeping gpt-6 astra (high · confidence 0.20)`.
-`selected` marks an initial choice, `keeping` preserves an established pair,
-`switched to` changes the model or effort, and `fallback to` means Jev was
-unavailable. Confidence uses its original 0-1 scale with two decimal places.
-It is the classifier's recommendation confidence, including
-when policy keeps a different pair; it is not answer accuracy. Unavailable
-confidence is shown as `n/a`. Full policy reasons remain in `$jev-explain`.
+For a protected change, rebuilding that observed prefix can outweigh positive
+benchmark task savings and keep the current pair. If rebuilding has a cost but
+task savings are unmeasured, the pair is also retained. Without observed reuse,
+missing task cost alone does not veto a change.
 
-For a guaranteed model and effort, use Codex's model picker or CLI options.
-Manual selections pass through without classification. While Jev Router is
-selected, the prompt is evidence for automatic routing, including any stated
-preferences; it is not a model-switching command protocol. Text cannot bypass
-the confidence, missing-evidence or cache guards. There is no phrase parser or
-separate inferred model override that can conflict with the selected pair.
+Context size uses observed input tokens for a matching prefix, then estimates
+appended text. Otherwise it estimates visible text, instructions and tools.
+Ciphertext and media size do not count as text tokens; unknown opaque content
+is flagged. These estimates and API prices do not predict future cache hits or
+Codex subscription quota.
 
-Pairs with no cheaper, strictly higher-scoring alternative are marked as being
-on the price-quality frontier. This is advisory: equal rounded scores do not
-prove equal capability, and specialized strengths may differ from the aggregate.
-No model is removed solely for being off that frontier.
+## Reassessment and compaction
 
-The bridge keeps the current pair, including the cold-start fallback, when a
-proposed reduction or an unproven capability change has low confidence, unless
-both independent assessments confidently identify completed substantive work
-and only routine execution or reporting remaining. Ambiguity among many pairs
-alone does not veto that recommendation; cache protection still applies. It does
-not cap an upgrade to save money. Effort order comes from the account catalog.
-For an unmeasured effort, measured levels of the same model bound a comparison:
-if a lower effort already exceeds the current pair, a higher effort can upgrade.
-This does not assign the unmeasured level a benchmark score or task cost.
-Overlapping bounds leave the cross-model comparison unknown, so it receives
-the same protection as a downgrade. Equal rounded scores do not prove an upgrade.
-When Jev cannot establish the required reasoning from the available evidence,
-its recommendation cannot reduce capability or same-model effort, even on a
-fresh task. Manual model selections still take precedence.
-For a protected change, the bridge compares rebuilding an observed cached prefix
-with benchmark task savings. Successful Responses completions supply actual
-input, cache-read, cache-write, output and reasoning-token counts when available.
-Only cache reads and writes from the last completed request count, and only when
-its entire input prefix, instructions, tools, model, effort and other request
-settings remain unchanged. Per-turn client metadata is excluded from that check.
-The persisted evidence contains a hash and item count, not another copy of input.
-Compaction or a changed prefix invalidates reuse; the bridge does not estimate
-partially reusable prefixes from JSON length. Missing usage is unknown, not a
-measured zero or evidence of a hot cache. Failed and interrupted responses do
-not establish cache measurements, and older responses cannot overwrite newer ones.
-Context size uses measured input tokens when this same prefix check succeeds,
-including requests with zero cache hits, and estimates only the appended text.
-Without a matching measurement it estimates visible input, instructions and tool
-schemas. Ciphertext and media payload lengths do not count as text tokens.
-Diagnostics and the classifier receive the estimate's source and an explicit flag
-when added opaque content has an unknown token count. This remains an estimate,
-including for price-tier selection, rather than an
-[exact preflight token count](https://developers.openai.com/api/docs/guides/token-counting).
-The estimate uses published rates; it does not predict future cache hits, cache
-expiry, retries or Codex subscription usage. It cannot force a downgrade.
-If rebuilding that measured prefix costs more than retaining it but task costs
-are unpublished, the current pair is retained: missing costs cannot establish
-savings. Without measured reuse, missing task costs alone do not veto a change.
-Quality upgrades remain eligible regardless of cache cost.
+Changed user messages or tool results trigger reassessment at the next Responses
+request. Successful tools can reveal harder work; a failure is not required.
+Retries and continuations reuse identical accepted evidence across restarts.
+The fingerprint covers routing questions, capabilities, supplied measurements, prices and
+observation date.
 
-## Continuing work
+New router notices use `msg_jev-` IDs and are excluded from Jev context.
+Older notices without those IDs can remain. User quotations and other messages
+are retained; OpenAI receives the original generation history.
 
-The bridge reassesses changed user messages and tool evidence at the next
-Responses request boundary. Successful tools can reveal a difficult problem,
-and a new instruction can change the work without a tool failure. There is no
-error-word parser or failure-count threshold. Identical evidence reuses the
-accepted decision, including after a restart. The fingerprint includes the
-question policy, catalog capabilities, supplied measurements, prices and
-observation date; changed evidence invalidates reuse even when pair IDs stay
-the same. Routing notices alone do not trigger another classifier call.
-Cancellation before forwarding
-and rejected HTTP requests do not establish a decision; older responses cannot
-overwrite newer requests.
+Native compaction uses the last eligible pair or normal fallback without calling
+Jev or replacing the routing decision. Both compaction metadata on `/responses`
+and `/responses/compact` are supported. The standalone endpoint receives no
+added reasoning parameter. Compaction input, output and opaque state pass
+through. Turn identity survives restarts, so a summary does not become a new
+user task.
 
-During a continuation, reduced capability or same-model effort requires confident
-assessments that substantive work is complete and only routine work remains.
-The usual confidence, missing-evidence and cache checks still apply. Upgrades
-do not require waiting for a failed approach. This protects unfinished work
-without imposing a permanent model or effort floor. Reassessment adds a Jev
-call when evidence changes, subject to the existing routing deadline.
+The bridge does not inject `configuration_update` items or change Codex's
+delegation instructions. Model switches preserve the full input, including
+encrypted items.
 
-For a new user message, the task history and recent results establish the scope
-of the remaining authorized work. Approval or an instruction to continue inherits
-unfinished work. An interruption also includes work that must resume after the
-reply. Explicit pauses, cancellations and new tasks change that scope; completed
-earlier work does not add difficulty. A short correctness question can still be hard.
-The previous request is a fallback when it is absent from the supplied history.
+## Notices
 
-Pair selection and the remaining-work assessments share the same scope rule.
-On a new turn, the current request supersedes conflicting earlier instructions.
-During a continuation, later user messages and actual outcomes update the scope
-of the opening request. Relevant facts and constraints stay in the evidence;
-paused, cancelled or replaced work does not contribute its old difficulty.
-This does not relax confidence or cache checks or assign models to particular
-phrases.
+```text
+[jev] keeping gpt-6 astra (high · confidence 0.20)
+```
 
-The default task context leaves out global instructions and tool schemas. A
-`full` mode includes those fields for comparisons. TypeSafe documents that
-[irrelevant detail can reduce accuracy](https://docs.typesafe.ai/model-jaggedness/jev-1.13),
-so a larger state is not automatically a better one. Both modes use the same
-model-and-effort candidates; the context mode does not restrict Jev's choices.
-See [configuration](configuration.md#routing-context) for the input-window limits,
-fitting behavior and data sent to TypeSafe.
+| State | Meaning |
+| --- | --- |
+| `selected` | Initial choice |
+| `keeping` | Current pair retained |
+| `switched to` | Model or effort changed |
+| `fallback to` | Jev unavailable |
 
-Native context compaction uses the last eligible model, including after a bridge
-restart. If no selection exists, it uses the normal catalog-based fallback.
-Compaction does not call the classifier or replace the task's routing decision.
-This covers compaction metadata on `/responses` and the standalone
-`/responses/compact` endpoint. The former retains the selected reasoning effort;
-the latter does not receive an added reasoning parameter. The bridge preserves
-the compaction input and response, including opaque state, as required by the
-[compaction contract](https://developers.openai.com/api/docs/guides/compaction).
-Subsequent changed evidence can be reassessed. An unchanged `turn_id` identifies
-a continuation even if its last user-role message is now a compaction summary;
-the original request and continuation downgrade checks still apply.
-Turn identity is saved with automatic and manual selections and restored after
-restarts. Clients without turn metadata use the existing message/tool boundary.
+Confidence is Jev's recommendation confidence on its original 0–1 scale, not
+answer accuracy or a percentage. It can describe a recommendation the safeguards
+did not accept; unavailable confidence is `n/a`.
+`$jev-explain` shows the recommendation, applied pair and policy reason.
 
-OpenAI documents that persisted reasoning is reusable within a model family.
-GPT-5.6 Luna, Terra and Sol can reuse each other's reasoning; incompatible
-reasoning is omitted by the API across families. The bridge preserves the full
-input, including encrypted items. A family change does not exclude a candidate or block an
-upgrade. Downgrade checks run after the classifier's recommendation.
+## Evidence and validation
 
-Changing effort can also affect caching. Astra supports `configuration_update`
-in standard single-agent mode, with restrictions on compaction. The bridge
-does not inject these items into Codex histories or claim guaranteed cache hits.
-It preserves Codex's cache key and avoids effort reductions whose estimated
-rebuild exceeds the expected saving. Quality upgrades remain eligible. See OpenAI's
-[reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) and
-[prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
+[model-profiles.json](../data/model-profiles.json) holds the September 30, 2026
+snapshot with source URLs, per-effort Intelligence Index observations, weighted
+benchmark task costs, API rates and reasoning-family metadata.
+Jev receives aggregate intelligence and task cost; individual evaluations remain
+in the data for research. Historical entries do not restore excluded models.
 
-Ultra's proactive delegation instructions are controlled by the Codex client.
-Selecting an effort in the bridge does not rewrite those instructions or change
-the user's delegation policy.
+The package ships this snapshot and does not scrape benchmarks during routing.
+Scores are aggregate observations, not task-specific success probabilities.
+Weighted task cost is not a raw token price or cost per successful task.
 
-## What remains unmeasured
+The September 30 comparison tested 11 tasks twice per version with short and
+long histories. Independent answer checks passed 44/44 for the revised router
+and 43/44 for the preceding version. With the Sol/Astra allowlist and identified
+notices excluded, Jev input tokens fell 49.9% on short histories and 6.4% on long
+histories in this sample. Experiments remain outside the repository.
 
-There is no workload-calibrated accuracy or savings guarantee. Jev confidence
-describes its selection, not the probability that the answer will be correct.
-Benchmark observations are priors, not a substitute for testing real tasks.
-
-A September 23, 2026 comparison against the preceding bridge revision tested
-eight tasks twice per version, checking generated answers independently. Both
-versions passed 16/16, including counterexamples for unsafe concurrency and
-generated interval-subtraction code checked on 250 inputs per answer. The
-preceding version chose Astra 16 times; the revised selection chose Astra 9,
-Sol 6 and Luna 1 time. This small sample supports retaining the simpler benchmark
-input; it does not establish a general accuracy, latency or savings guarantee.
-
-A workload comparison needs repeated, held-out tasks with independent correctness
-checks. Record first-pass success, retries, tool errors, total completion time,
-input and cached tokens, reasoning and answer tokens, and cost per successful
-task. Report sample counts and uncertainty. API prices and benchmark throughput
-do not directly predict Codex quota consumption or task latency.
+Offline checks covered 4,800 policy combinations. Native Codex checks covered
+Sol/Astra switches, automatic compaction and context recall.
+These checks do not establish a general accuracy, latency or savings guarantee.

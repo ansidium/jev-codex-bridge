@@ -1,7 +1,7 @@
 {
   "name": "jev-codex-bridge",
   "version": "0.1.0",
-  "description": "Model and reasoning routing for Codex Desktop and CLI, with a Windows service and validated updates",
+  "description": "Jev model and reasoning-effort routing for Codex Desktop and CLI",
   "type": "module",
   "private": true,
   "license": "MIT",

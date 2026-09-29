@@ -2,23 +2,25 @@
 
 [![Checks](https://github.com/ansidium/jev-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/ansidium/jev-codex-bridge/actions/workflows/ci.yml)
 
-[TypeSafe Jev](https://docs.typesafe.ai) selects a model and reasoning effort for
-each new message in Codex Desktop or CLI. Codex keeps its existing login.
-Windows setup includes a background service, daily updates and rollback.
+[TypeSafe Jev](https://docs.typesafe.ai) selects a model and reasoning effort
+for Codex Desktop and CLI. The local bridge uses your existing Codex login.
+Windows setup includes a background service, tested updates and rollback.
 
 ## Quick start
 
-Requires **Node.js 24+, npm, Git, Codex**, and a
+Requires Node.js 24+, npm, Git, Codex and a
 [TypeSafe API key](https://console.typesafe.ai/settings/keys).
 
 ```powershell
 npm install --global git+https://github.com/ansidium/jev-codex-bridge.git --ignore-scripts
 ```
 
-Create `~/.jev-router.env` outside your repositories:
+Create `~/.jev-router.env` outside your repositories. This policy limits
+automatic selection to GPT-6.1 Sol and GPT-6 Astra:
 
 ```dotenv
 TYPESAFE_API_KEY=your-key
+JEV_CODEX_INCLUDE_MODELS=gpt-6.1-sol,gpt-6-astra
 ```
 
 ```powershell
@@ -26,13 +28,12 @@ jev-bridge install
 jev-bridge status
 ```
 
-Restart Codex Desktop. **Jev Router** appears in the model picker and becomes the
-default for new tasks. In tasks connected to the bridge, choosing a concrete model
-pauses routing; choosing Jev Router resumes it.
+Restart Codex Desktop after first-time setup. Select **Jev Router** to enable
+routing or a concrete model to choose manually.
 
-Existing tasks retain their original provider. To connect one, close Codex Desktop
-and any CLI using that task, then run `jev-bridge attach THREAD_ID` and reopen Codex.
-Use the UUID from the task's copied link. The installer backs up `config.toml`.
+Existing tasks keep their provider. To connect one, close Codex Desktop and any
+CLI using that task, run `jev-bridge attach THREAD_ID`, then reopen Codex.
+Use the UUID from the task's copied link.
 
 For the CLI:
 
@@ -41,57 +42,49 @@ jev-codex resume --last
 jev-codex exec "fix the failing test"
 ```
 
-On macOS or Linux, use
-`jev-bridge install --no-service` and run `jev-bridge serve` under your own supervisor.
+On macOS and Linux, install with `jev-bridge install --no-service` and run
+`jev-bridge serve` under your own supervisor.
 
 ## Routing
 
-```text
-Codex Desktop / CLI
-        |
-        v
-  local bridge ----> Jev: choose model + effort
-        |
-        v
-  OpenAI, using your Codex login
-```
+- Selects a supported model-and-effort pair from task history and tool results.
+  Your reasoning selection sets the ceiling.
+- Reassesses changed user instructions and tool evidence, including successful
+  results. Retries and continuations reuse decisions when evidence is unchanged.
+- Protects unfinished reasoning and observed cache reuse when reducing capability
+  or effort. Quality upgrades remain eligible.
+- Keeps the current eligible pair, or the initial fallback, if Jev is unavailable.
 
-- Uses the task history and tool results to choose among your account's supported
-  model-and-effort pairs, with quality first and your reasoning selection as a ceiling.
-- Keeps the chosen pair through tool calls, with a checked upgrade if repeated
-  failures reveal a reasoning blocker.
-- Keeps the current pair if Jev is unavailable; uncertain reductions require confidently completed, routine work.
+TypeSafe receives routing text and model metadata. OpenAI receives the Codex
+conversation. Decisions and routing context are stored locally.
 
-Run `$jev-explain` in Codex to inspect the latest decision.
-See [selection policy and benchmark sources](docs/routing.md).
+Run `$jev-explain` in Codex for the decision details.
 
 ## Updates
-
-Updates are tested and activated after current requests finish.
 
 ```powershell
 jev-bridge update
 jev-bridge rollback
 ```
 
-Rollback pauses automatic updates; `jev-bridge auto-update on` re-enables them.
-See [service controls, logs and removal](docs/operations.md).
+Validated updates activate when current requests finish. Rollback pauses
+automatic updates; `jev-bridge auto-update on` re-enables them.
 
-## Data
-
-TypeSafe receives task text, tool calls and results, and model metadata for routing.
-OpenAI receives the Codex conversation. Routing context and decisions are also
-saved locally. See [context modes and data handling](docs/configuration.md#routing-context).
+| Guide | Contents |
+| --- | --- |
+| [Configuration](docs/configuration.md) | Model policy, key files, context and diagnostics |
+| [Routing](docs/routing.md) | Selection, cache protection, compaction and evidence |
+| [Operations](docs/operations.md) | Service controls, updates, logs and removal |
 
 ## Development
 
 ```sh
 npm ci --ignore-scripts
-npm test
 npm run check
+npm test
 ```
 
-Tests run without API keys. CI covers Windows, Linux and macOS.
+Tests require no API keys. CI covers Windows, Linux and macOS.
 
 Based on [Jev Router](https://github.com/gargpratyush/jev-router).
 [MIT](LICENSE) · [Attribution](NOTICE)
