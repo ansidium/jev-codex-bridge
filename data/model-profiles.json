@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-09-23",
+  "asOf": "2026-09-30",
   "benchmark": {
     "name": "Artificial Analysis Intelligence Index v4.3.2",
     "methodology": "https://artificialanalysis.ai/methodology/intelligence-benchmarking",
@@ -84,11 +84,11 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
         "rates": { "input": 0.20, "cachedInput": 0.02, "cacheWrite": 0.25, "output": 0.75 } },
       "efforts": {
-        "low": { "intelligence": 21, "aaBriefcaseElo": 724.99, "terminalBench4SuccessRate": 0.0000 },
-        "medium": { "intelligence": 29, "aaBriefcaseElo": 1063.32, "terminalBench4SuccessRate": 0.0253 },
-        "high": { "intelligence": 32, "aaBriefcaseElo": 1176.49, "terminalBench4SuccessRate": 0.0455 },
-        "xhigh": { "intelligence": 34, "aaBriefcaseElo": 1216.68, "terminalBench4SuccessRate": 0.0808 },
-        "max": { "intelligence": 37, "aaBriefcaseElo": 1299.23, "terminalBench4SuccessRate": 0.1263 }
+        "low": { "intelligence": 21, "costPerTaskUSD": 0.0045, "aaBriefcaseElo": 724.99, "terminalBench4SuccessRate": 0.0000 },
+        "medium": { "intelligence": 29, "costPerTaskUSD": 0.02, "aaBriefcaseElo": 1063.32, "terminalBench4SuccessRate": 0.0253 },
+        "high": { "intelligence": 32, "costPerTaskUSD": 0.03, "aaBriefcaseElo": 1176.49, "terminalBench4SuccessRate": 0.0455 },
+        "xhigh": { "intelligence": 34, "costPerTaskUSD": 0.04, "aaBriefcaseElo": 1216.68, "terminalBench4SuccessRate": 0.0808 },
+        "max": { "intelligence": 37, "costPerTaskUSD": 0.07, "aaBriefcaseElo": 1299.23, "terminalBench4SuccessRate": 0.1263 }
       }
     },
     "gpt-6-sol": {
@@ -100,11 +100,27 @@
         "source": "https://developers.openai.com/api/docs/models/gpt-6-sol",
         "rates": { "input": 4.00, "cachedInput": 0.40, "cacheWrite": 5.00, "output": 15.00 } },
       "efforts": {
-        "low": { "intelligence": 34, "aaBriefcaseElo": 905.16, "terminalBench4SuccessRate": 0.0909 },
-        "medium": { "intelligence": 40, "aaBriefcaseElo": 1142.18, "terminalBench4SuccessRate": 0.1869 },
-        "high": { "intelligence": 43, "aaBriefcaseElo": 1289.24, "terminalBench4SuccessRate": 0.2626 },
-        "xhigh": { "intelligence": 44, "aaBriefcaseElo": 1363.66, "terminalBench4SuccessRate": 0.3030 },
-        "max": { "intelligence": 48, "aaBriefcaseElo": 1482.78, "terminalBench4SuccessRate": 0.4394 }
+        "low": { "intelligence": 34, "costPerTaskUSD": 0.13, "aaBriefcaseElo": 905.16, "terminalBench4SuccessRate": 0.0909 },
+        "medium": { "intelligence": 40, "costPerTaskUSD": 0.25, "aaBriefcaseElo": 1142.18, "terminalBench4SuccessRate": 0.1869 },
+        "high": { "intelligence": 43, "costPerTaskUSD": 0.38, "aaBriefcaseElo": 1289.24, "terminalBench4SuccessRate": 0.2626 },
+        "xhigh": { "intelligence": 44, "costPerTaskUSD": 0.52, "aaBriefcaseElo": 1363.66, "terminalBench4SuccessRate": 0.3030 },
+        "max": { "intelligence": 48, "costPerTaskUSD": 1.05, "aaBriefcaseElo": 1482.78, "terminalBench4SuccessRate": 0.4394 }
+      }
+    },
+    "gpt-6.1-sol": {
+      "reasoningFamily": "gpt-6",
+      "source": "https://artificialanalysis.ai/models/releases/gpt-6-1-sol",
+      "ratesSource": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "rates": { "input": 2.00, "cachedInput": 0.10, "cacheWrite": 2.50, "output": 10.00 },
+      "longContext": { "aboveInputTokens": 272000,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "rates": { "input": 4.00, "cachedInput": 0.20, "cacheWrite": 5.00, "output": 15.00 } },
+      "efforts": {
+        "low": { "intelligence": 42, "costPerTaskUSD": 0.13, "aaBriefcaseElo": 1118.39, "terminalBench4SuccessRate": 0.3081 },
+        "medium": { "intelligence": 48, "costPerTaskUSD": 0.21, "aaBriefcaseElo": 1364.77, "terminalBench4SuccessRate": 0.4798 },
+        "high": { "intelligence": 50, "costPerTaskUSD": 0.32, "aaBriefcaseElo": 1471.09, "terminalBench4SuccessRate": 0.5152 },
+        "xhigh": { "intelligence": 51, "costPerTaskUSD": 0.39, "aaBriefcaseElo": 1506.81, "terminalBench4SuccessRate": 0.5404 },
+        "max": { "intelligence": 52, "costPerTaskUSD": 0.72, "aaBriefcaseElo": 1564.21, "terminalBench4SuccessRate": 0.5606 }
       }
     }
   }

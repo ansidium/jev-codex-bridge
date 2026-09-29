@@ -17,7 +17,7 @@ export const CODEX_AUTO_MODEL = "jev-router";
 const DEFAULT_MODELS = {
   haiku: "gpt-6-luna",
   sonnet: "gpt-5.6-terra",
-  opus: "gpt-6-sol",
+  opus: "gpt-6.1-sol",
   fable: "gpt-6-astra",
 };
 const MODEL_ENV = {

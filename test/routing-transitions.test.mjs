@@ -191,23 +191,23 @@ test("a rejected upstream request leaves no cached evidence and its retry is rea
 
 const completion = (res, cached = 128, written = 64) => res.writeHead(200, { "content-type": "text/event-stream" }).end(
   `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { status: "completed",
-    usage: { input_tokens: 300, input_tokens_details: { cached_tokens: cached, cache_write_tokens: written }, output_tokens: 12 } } })}\n\n`);
+    usage: { input_tokens: Math.max(300, cached + written), input_tokens_details: { cached_tokens: cached, cache_write_tokens: written }, output_tokens: 12 } } })}\n\n`);
 
 test("measured cache survives restart, protects an unchanged prefix and is not attributed to a compacted prefix", async t => {
   let next = answer("gpt-6-sol@max");
-  const f = await fixture(t, () => next, { models: ["gpt-6-luna", "gpt-6-sol"], respond: (_body, res) => completion(res) });
+  const f = await fixture(t, () => next, { models: ["gpt-6-luna", "gpt-6-sol"], respond: (_body, res) => completion(res, 420000, 0) });
   const turnId = randomUUID(), input = initial("Complete the proof.");
   await f.send(input, { turnId });
-  assert.equal(f.status().usage.inputTokens, 300);
-  assert.equal(f.status().cache.tokens, 192);
+  assert.equal(f.status().usage.inputTokens, 420000);
+  assert.equal(f.status().cache.tokens, 420000);
   await f.restart();
   next = answer("gpt-6-sol@low", "routine", "complete");
   input.push(result("verified", "The proof is complete; report the result."));
   await f.send(input, { turnId });
   assert.equal(f.seen.at(-1).model, "gpt-6-sol");
   assert.equal(f.seen.at(-1).reasoning.effort, "max");
-  assert.equal(f.status().cachedPrefixTokens, 192);
-  assert.match(f.status().reason, /cache-savings-unmeasured/);
+  assert.equal(f.status().cachedPrefixTokens, 420000);
+  assert.match(f.status().reason, /effort-change-not-worth-cache-rebuild/);
   const before = f.status();
   await f.send(initial("Create a compact summary."), { turnId, kind: "compaction" });
   assert.deepEqual(f.status(), before);
@@ -274,7 +274,7 @@ test("manual selections collect usage and a failed stream clears it without over
   fail = true;
   input.push(result("done", "Verified. Report the result."));
   await f.send(input, { turnId });
-  assert.match(f.status().reason, /cache-savings-unmeasured/);
+  assert.equal(f.status().reason, "jev");
   assert.equal(f.status().cache, undefined);
   assert.equal(f.status().usage, undefined);
   input.push({ role: "user", content: "Retry the final report." });

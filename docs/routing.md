@@ -8,7 +8,7 @@ choices. Catalog descriptions are omitted from the classification request.
 ## Published observations
 
 [model-profiles.json](../data/model-profiles.json) contains observations dated
-September 23, 2026, with source URLs and units:
+September 30, 2026, with source URLs and units:
 
 - Artificial Analysis Intelligence Index v4.3.2 scores for each measured effort.
 - AA-Briefcase v1.1 Elo for professional deliverables and Terminal-Bench 4.0
@@ -20,6 +20,7 @@ September 23, 2026, with source URLs and units:
 - Reasoning-family compatibility from OpenAI's documentation.
 
 Sources: [GPT-6 Luna](https://artificialanalysis.ai/models/releases/gpt-6-luna),
+[GPT-6.1 Sol](https://artificialanalysis.ai/models/releases/gpt-6-1-sol),
 [GPT-6 Sol](https://artificialanalysis.ai/models/releases/gpt-6-sol),
 [GPT-5.6 Luna](https://artificialanalysis.ai/models/releases/gpt-5-6-luna),
 [Terra](https://artificialanalysis.ai/models/releases/gpt-5-6-terra),
@@ -27,14 +28,14 @@ Sources: [GPT-6 Luna](https://artificialanalysis.ai/models/releases/gpt-6-luna),
 [Astra](https://artificialanalysis.ai/models/releases/gpt-6-astra),
 [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
 
-At Max, GPT-6 Sol scores 48 versus 47 for GPT-5.6 Sol; both Luna generations
-round to 37. Individual evaluations differ, so this does not establish that the
+At Max, GPT-6.1 Sol scores 52 versus 48 for GPT-6 Sol and 47 for GPT-5.6 Sol;
+both Luna generations round to 37. Individual evaluations differ, so this does not establish that the
 new generation wins every task. Standard input/output prices per million tokens
-are $2/$10 for [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)
+are $2/$10 for [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
 and $0.10/$0.50 for [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
-AA has not published complete weighted task costs for these two releases in this
-snapshot. Those fields are omitted, and neither model establishes price-quality
-dominance using token prices alone. Previous-generation observations remain for
+GPT-6.1 Sol cache reads cost $0.10 per million tokens, versus $0.20 for GPT-6 Sol.
+This snapshot includes the newly published weighted task costs for GPT-6 Sol and
+Luna as well as GPT-6.1 Sol. Previous-generation observations remain for
 manual selections and account catalogs that still expose those models.
 The classifier receives the aggregate intelligence score and measured task cost.
 Individual evaluation results remain in the source data and diagnostics. Feeding

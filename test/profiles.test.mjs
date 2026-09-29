@@ -13,7 +13,7 @@ const catalog = new Map([
 
 test("GPT-6 defaults use their own evidence and catalog effort capabilities", () => {
   assert.deepEqual(codexModels().map(model => model.id),
-    ["gpt-6-luna", "gpt-5.6-terra", "gpt-6-sol", "gpt-6-astra"]);
+    ["gpt-6-luna", "gpt-5.6-terra", "gpt-6.1-sol", "gpt-6-astra"]);
   const models = new Map([
     ["jev-router", catalog.get("jev-router")],
     ["gpt-6-sol", { supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max", "ultra"]) }],
@@ -26,12 +26,32 @@ test("GPT-6 defaults use their own evidence and catalog effort capabilities", ()
   assert(!profiles.some(p => p.id === "gpt-6-luna@ultra"));
   for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
     const low = profiles.find(p => p.id === `${model}@low`);
-    assert.equal(low.benchmark.costPerTaskUSD, undefined);
+    assert(Number.isFinite(low.benchmark.costPerTaskUSD));
     assert.equal(low.reasoningFamily, "gpt-6");
     assert.equal(low.rates.input, model === "gpt-6-sol" ? 2 : 0.1);
   }
   const long = codexProfiles(codexModels(models), models, "low", 272001);
   assert.deepEqual(long.map(p => p.rates.output), [15, 0.75]);
+});
+
+test("GPT-6.1 uses its own measurements, cache discount and actual catalog efforts", () => {
+  const info = { slug: "gpt-6.1-sol", context_window: 272000,
+    supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max", "ultra"]) };
+  const models = new Map([["jev-router", catalog.get("jev-router")], [info.slug, info]]);
+  const profiles = codexProfiles(codexModels(models), models, "ultra");
+  assert.equal(profiles.find(p => p.effort === "medium").benchmark.intelligence, 48);
+  const max = profiles.find(p => p.effort === "max");
+  assert.equal(max.benchmark.intelligence, 52);
+  assert.equal(max.benchmark.costPerTaskUSD, 0.72);
+  assert.equal(max.rates.cachedInput, 0.10);
+  assert.equal(max.contextWindow, info.context_window);
+  const ultra = profiles.find(p => p.effort === "ultra");
+  assert.equal(ultra.benchmark, undefined);
+  info.supported_reasoning_levels.pop();
+  assert.deepEqual(codexProfiles(codexModels(models), models, "ultra").map(p => p.effort),
+    ["low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(codexProfiles(codexModels(models), models, "low", 272001)[0].rates,
+    { input: 4, cachedInput: 0.20, cacheWrite: 5, output: 15 });
 });
 
 test("joint candidates respect the user ceiling and each model's actual capabilities", () => {

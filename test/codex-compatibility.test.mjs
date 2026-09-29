@@ -95,13 +95,13 @@ test("model eligibility follows catalog capabilities and configured exclusions",
   process.env.JEV_CODEX_EXCLUDE_MODELS = " gpt-standard, gpt-lite ";
   assert.deepEqual(codexModels(models), []);
   assert.deepEqual(codexModels(models, true), []);
-  assert(codexModels().some(model => model.id === "gpt-6-sol"));
-  process.env.JEV_CODEX_EXCLUDE_MODELS = "gpt-6-sol";
-  assert(!codexModels().some(model => model.id === "gpt-6-sol"));
-  const generations = new Map(["gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna"]
+  assert(codexModels().some(model => model.id === "gpt-6.1-sol"));
+  process.env.JEV_CODEX_EXCLUDE_MODELS = "gpt-6.1-sol";
+  assert(!codexModels().some(model => model.id === "gpt-6.1-sol"));
+  const generations = new Map(["gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"]
     .map(slug => [slug, { slug }]));
   process.env.JEV_CODEX_EXCLUDE_MODELS = "gpt-5.6-luna";
-  assert.deepEqual(codexModels(generations).map(model => model.id), ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna"]);
+  assert.deepEqual(codexModels(generations).map(model => model.id), ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"]);
 });
 
 test("Lite requests use compatible models; rejected requests do not establish routing state", async t => {
