@@ -17,7 +17,7 @@ test("native compaction preserves the selected model and routing state across re
   }) + '\n\n';
   let reject = false;
   const upstream = http.createServer((req, res) => {
-    if (req.url === "/models") return res.end(JSON.stringify({ models: ["gpt-5.6-sol", "gpt-6-astra"].map(slug => ({
+    if (req.url.startsWith("/models")) return res.end(JSON.stringify({ models: ["gpt-5.6-sol", "gpt-6-astra"].map(slug => ({
       slug, supported_reasoning_levels: [{ effort: "low" }, { effort: "high" }], default_reasoning_level: "high",
     })) }));
     const chunks = [];

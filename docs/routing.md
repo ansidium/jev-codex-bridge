@@ -4,6 +4,10 @@ Jev selects one supported model-and-effort pair for each new user turn and
 reassesses when task evidence changes during a continuation. The
 selection instruction puts reliable completion first, then cost among capable
 choices. Catalog descriptions are omitted from the classification request.
+The optional model allowlist restricts automatic choices before pairs, fallback
+and cache safeguards are evaluated. With `JEV_CODEX_INCLUDE_MODELS=gpt-6.1-sol,gpt-6-astra`,
+only those two models and their supported efforts are considered. Historical
+observations do not add excluded models back into routing.
 
 ## Published observations
 
@@ -65,11 +69,29 @@ blocker. These diagnostics do not form a weighted pricing formula. The remaining
 reasoning assessment distinguishes routine steps from difficult reviews; it
 does not impose a cheap-model ceiling. The pair-selection question remains
 independent of these assessments.
+An already specified approach can still require reasoning to execute interacting
+rules and verify the result. Routine work means directly observable reporting or
+an elementary transformation, not every short or fully specified request.
+The pair question compares first-pass reliability before price: a cheaper pair
+is preferred only when its expected reliability for that work is comparable to
+stronger measured pairs. This is a qualitative instruction, without model floors
+or a task-word classifier.
 [TypeSafe](https://docs.typesafe.ai/introduction) evaluates each question
 independently; it does not run the candidate models or verify their answers.
 
+All six questions share one TypeSafe request. Each pair retains its full
+capabilities, prices and measurements. A shared model table or removal of the
+state's candidate list reduced tokens but regressed independently checked
+answers, so those representations are not used. Task constraints and diagnostic
+coverage are kept; input savings come from excluding identified router notices
+and pairs outside the configured model allowlist.
+
 The classifier does not receive the previously selected pair as a separate
-state field; earlier assignments can still appear in conversation history.
+state field. New bridge notices have standard `msg_jev-` message IDs, which Codex
+preserves. Identified assistant commentary notices are omitted from classifier
+context, including full mode; user quotations and other messages remain.
+Older notices without those IDs can still appear in conversation history.
+The generation history sent to OpenAI is unchanged.
 The bridge keeps the pair locally for fallback, downgrade checks and explanations.
 
 The commentary line uses the catalog's model label in lowercase, replacing
@@ -140,7 +162,11 @@ The bridge reassesses changed user messages and tool evidence at the next
 Responses request boundary. Successful tools can reveal a difficult problem,
 and a new instruction can change the work without a tool failure. There is no
 error-word parser or failure-count threshold. Identical evidence reuses the
-accepted decision, including after a restart. Cancellation before forwarding
+accepted decision, including after a restart. The fingerprint includes the
+question policy, catalog capabilities, supplied measurements, prices and
+observation date; changed evidence invalidates reuse even when pair IDs stay
+the same. Routing notices alone do not trigger another classifier call.
+Cancellation before forwarding
 and rejected HTTP requests do not establish a decision; older responses cannot
 overwrite newer requests.
 

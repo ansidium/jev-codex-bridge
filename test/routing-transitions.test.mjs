@@ -4,8 +4,9 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { startCodexProxy, codexConversationKey } from "../src/codex-proxy.mjs";
+import { startCodexProxy, codexConversationKey, jevDecisionEvents } from "../src/codex-proxy.mjs";
 import { readStatus, STATUS_DIR } from "../src/status.mjs";
+import { PROFILE_DATA } from "../src/profiles.mjs";
 
 const initial = text => [{ type: "additional_tools", role: "developer", tools: [] }, { role: "user", content: text }];
 const result = (id, output) => ({ type: "function_call_output", call_id: id, output });
@@ -15,11 +16,12 @@ const answer = (choice, gain = "deep", work = "advancing", confidence = 0.99) =>
 async function fixture(t, route, { cli = false, respond, models = ["gpt-5.6-luna", "gpt-6-astra"] } = {}) {
   const thread = randomUUID(), record = cli ? `codex-test-${thread}` : `codex-thread-${thread}`;
   const calls = [], seen = [], disconnected = [];
+  const entries = models.map(slug => ({
+    slug, visibility: "list", supported_in_api: true,
+    supported_reasoning_levels: ["low", "max"].map(effort => ({ effort })), default_reasoning_level: "max",
+  }));
   const upstream = http.createServer((req, res) => {
-    if (req.url.startsWith("/models")) return res.end(JSON.stringify({ models: models.map(slug => ({
-      slug, visibility: "list", supported_in_api: true,
-      supported_reasoning_levels: ["low", "max"].map(effort => ({ effort })), default_reasoning_level: "max",
-    })) }));
+    if (req.url.startsWith("/models")) return res.end(JSON.stringify({ models: entries }));
     const chunks = [];
     req.on("data", chunk => chunks.push(chunk));
     req.on("end", () => {
@@ -40,7 +42,8 @@ async function fixture(t, route, { cli = false, respond, models = ["gpt-5.6-luna
     await new Promise(resolve => upstream.close(resolve));
     try { unlinkSync(join(STATUS_DIR, `${record}.json`)); } catch {}
   });
-  return { thread, calls, seen, disconnected, status: () => readStatus(record),
+  return { thread, calls, seen, disconnected, catalog: entries, status: () => readStatus(record),
+    refresh: () => fetch(`http://127.0.0.1:${proxy.port}/models`).then(response => response.text()),
     restart: async () => { await new Promise(resolve => proxy.close().once("close", resolve)); proxy = await startCodexProxy(options); },
     send: async (input, { turnId, kind = "turn", model = "jev-router", source = "header", signal } = {}) => {
       const metadata = { request_kind: kind, ...(turnId ? { turn_id: turnId } : {}), thread_id: thread };
@@ -89,6 +92,51 @@ test("new evidence reassesses steering and successful tools; identical retries p
       assert.equal(f.calls.length, 4);
     });
   }
+});
+
+test("routing notices alone do not spend another Jev call or alter the upstream history", async t => {
+  const f = await fixture(t, () => answer("gpt-6-astra@max"));
+  const input = initial("Prove transaction ordering."), options = { turnId: randomUUID() };
+  await f.send(input, options);
+  const wire = jevDecisionEvents(f.status());
+  const notice = wire.split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)))
+    .find(event => event.type === "response.output_item.done").item;
+  input.push(notice);
+  await f.send(input, options);
+  await f.restart(); await f.send(input, options);
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(f.seen.at(-1).input, input);
+});
+
+test("reused decisions are invalidated by changed capability, prices and pair measurements", async t => {
+  const f = await fixture(t, () => answer("gpt-6.1-sol@low", "routine", "complete"), { models: ["gpt-6.1-sol"] });
+  const input = initial("Report the verified result."), options = { turnId: randomUUID() };
+  const data = PROFILE_DATA.models["gpt-6.1-sol"], rates = { ...data.rates }, measurement = { ...data.efforts.low };
+  t.after(() => { Object.assign(data.rates, rates); Object.assign(data.efforts.low, measurement); });
+  await f.send(input, options);
+  await f.send(input, options);
+  assert.equal(f.calls.length, 1);
+  f.catalog[0].context_window = 123456;
+  await f.refresh(); await f.send(input, options);
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls.at(-1).profiles[0].contextWindow, 123456);
+  f.catalog[0].display_name = "Updated display label";
+  await f.refresh(); await f.send(input, options);
+  assert.equal(f.calls.length, 2);
+  data.rates.cachedInput *= 2;
+  await f.send(input, options);
+  assert.equal(f.calls.length, 3);
+  data.efforts.low.costPerTaskUSD += 0.01;
+  await f.send(input, options);
+  assert.equal(f.calls.length, 4);
+  data.efforts.low.intelligence += 1;
+  await f.send(input, options);
+  assert.equal(f.calls.length, 5);
+  data.efforts.low.aaBriefcaseElo += 1;
+  await f.send(input, options);
+  await f.restart(); await f.send(input, options);
+  // This metric is not supplied to Jev; identical routing evidence still reuses a decision.
+  assert.equal(f.calls.length, 5);
 });
 
 test("status followed by autonomous repair can upgrade before any tool failure", async t => {

@@ -55,13 +55,18 @@ do not need this step. Codex continues to use its existing ChatGPT or API login.
 ## Model policy
 
 The account catalog supplies the available model IDs and reasoning capabilities.
+The bridge caches it per account (or API credential) and Codex client version.
+Concurrent cold requests share a fetch. Explicit refreshes take precedence over
+older pending cold fetches; a known empty catalog produces a routing error
+instead of guessed models. Failed fetches can retry without borrowing another
+account's or version's catalog.
 Before that catalog arrives, the router uses these configurable defaults:
 
 | Variable | Fallback model |
 | --- | --- |
 | `JEV_CODEX_FAST_MODEL` | `gpt-6-luna` |
 | `JEV_CODEX_BALANCED_MODEL` | `gpt-5.6-terra` |
-| `JEV_CODEX_STRONG_MODEL` | `gpt-6-sol` |
+| `JEV_CODEX_STRONG_MODEL` | `gpt-6.1-sol` |
 | `JEV_CODEX_LONG_MODEL` | `gpt-6-astra` |
 
 The last entry is the frontier tier. `JEV_ALLOW_FABLE=0` disables it; the variable
@@ -70,14 +75,20 @@ are enabled by default. Names and configured IDs identify the legacy aliases;
 catalog descriptions are not used as evidence of quality.
 
 Automatic selection excludes hidden models and models whose catalog metadata
-rejects the request's Responses Lite format. `JEV_CODEX_EXCLUDE_MODELS` excludes
-additional model IDs, separated by commas. Manual model selections pass through.
-For example, `JEV_CODEX_EXCLUDE_MODELS=gpt-5.6-luna` retires the previous Luna
-from automatic selection without removing manual access. GPT-5.6 Sol remains
-eligible when the account catalog exposes it, including its Max profile.
+rejects the request's Responses Lite format. `JEV_CODEX_INCLUDE_MODELS` restricts
+selection to the listed model IDs, separated by commas. When unset, all compatible
+account models remain eligible; an empty list allows none. `JEV_CODEX_EXCLUDE_MODELS`
+can exclude additional IDs, including included models. Both settings also apply
+to cold-start defaults and fallback. Manual model selections pass through.
+
+For a policy using only the latest Sol and Astra, put this in the key file:
+
+```dotenv
+JEV_CODEX_INCLUDE_MODELS=gpt-6.1-sol,gpt-6-astra
+```
 
 This table lists fallback model IDs, not reasoning levels or selection frequency.
-Model and effort are chosen together. GPT-6 Sol and Astra can run at `low`, `medium`, `high`,
+Model and effort are chosen together. GPT-6.1 Sol and Astra can run at `low`, `medium`, `high`,
 `xhigh`, `max` or `ultra` when those levels are present in the account catalog.
 Luna can use `max` under an Ultra ceiling without receiving an unsupported effort.
 All compatible pairs remain eligible; an aggregate benchmark does not establish

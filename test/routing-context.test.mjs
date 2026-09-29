@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { codexRoutingContext, contextExcerpt, conversationExcerpt, fitRoutingState } from "../src/routing-context.mjs";
 import { askJev } from "../src/router.mjs";
+import { jevDecisionEvents } from "../src/codex-proxy.mjs";
 
 test("task context carries constraints, failed tools, summaries and media indicators", () => {
   const body = {
@@ -38,6 +39,27 @@ test("task context carries constraints, failed tools, summaries and media indica
   ] }, "task", "Continue");
   assert.equal((noDuplicate.match(/Continue/g) ?? []).length, 1);
   assert.match(noDuplicate, /Still failing/);
+});
+
+test("only identified routing notices are excluded; user quotes and other messages remain", () => {
+  const wire = jevDecisionEvents({ model: "gpt-example", confidence: 0.9, reason: "jev", reasoningEffort: "low" });
+  const notice = wire.split("\n").filter(line => line.startsWith("data: ")).map(line => JSON.parse(line.slice(6)))
+    .find(event => event.type === "response.output_item.done").item;
+  assert.match(notice.id, /^msg_jev-/);
+  const body = { input: [notice,
+    { ...notice, id: "msg_user-quote", role: "user" },
+    { ...notice, id: "msg_other-commentary" },
+    { ...notice, phase: "final_answer" },
+    { role: "user", content: "Explain this routing decision." },
+  ] };
+  const original = structuredClone(body);
+  for (const mode of ["task", "full"]) {
+    const entries = codexRoutingContext(body, mode).split("\n").map(JSON.parse);
+    assert.equal(entries.length, body.input.length - 1);
+    assert.deepEqual(entries.map(entry => entry.role), ["user", "assistant", "assistant", "user"]);
+    assert.equal(entries[0].text, notice.content[0].text);
+  }
+  assert.deepEqual(body, original);
 });
 
 test("task context excludes system and developer scaffolding by role at any position", () => {

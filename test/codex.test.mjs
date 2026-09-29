@@ -402,9 +402,10 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
     statusId,
   });
   t.after(close);
-  const headers = { authorization: "Bearer subscription-token", "chatgpt-account-id": "acct" };
+  const headers = { authorization: "Bearer subscription-token", "chatgpt-account-id": "acct",
+    "user-agent": "Codex Desktop/1.2.3 (test)" };
 
-  const catalog = await fetch(`http://127.0.0.1:${port}/models?client_version=1`, { headers }).then((r) => r.json());
+  const catalog = await fetch(`http://127.0.0.1:${port}/models?client_version=1.2.3`, { headers }).then((r) => r.json());
   assert.equal(catalog.models[0].slug, "jev-router");
 
   const response = await fetch(`http://127.0.0.1:${port}/responses`, {

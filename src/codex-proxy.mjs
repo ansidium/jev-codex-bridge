@@ -2,7 +2,7 @@ import http from "node:http";
 import https from "node:https";
 import { createHash, randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
-import { availableTiers, THRESHOLDS, previousRoutingContext } from "./config.mjs";
+import { availableTiers, THRESHOLDS, previousRoutingContext, QUESTIONS, questionForProfiles } from "./config.mjs";
 import { askJev } from "./router.mjs";
 import { codexInputItems, codexRoutingContext, textForRouting as textOf } from "./routing-context.mjs";
 import { decide } from "./policy.mjs";
@@ -40,11 +40,12 @@ export function codexTierOf(model) {
 
 /** Exact GPT models in Codex's account catalog; configured ids are the cold-start fallback. */
 export function codexModels(models = new Map(), responsesLite = false) {
+  const included = process.env.JEV_CODEX_INCLUDE_MODELS?.split(",").map(id => id.trim());
   const excluded = new Set((process.env.JEV_CODEX_EXCLUDE_MODELS ?? "").split(",").map(id => id.trim()));
   const source = models.size ? [...models.values()] : Object.keys(DEFAULT_MODELS).map(tier => ({ slug: codexModelOf(tier) }));
   return source
     .filter((model) => model.slug !== CODEX_AUTO_MODEL && model.supported_in_api !== false &&
-      model.visibility !== "hide" && !excluded.has(model.slug) &&
+      model.visibility !== "hide" && (!included || included.includes(model.slug)) && !excluded.has(model.slug) &&
       (!responsesLite || model.use_responses_lite !== false))
     .map((model) => ({
       id: model.slug,
@@ -131,7 +132,7 @@ export function jevDecisionEvents({ tier, model = codexModelOf(tier), modelLabel
   const action = unavailable ? "fallback to" : !hasPriorModel ? "selected" : changed ? "switched to" : "keeping";
   const certainty = !unavailable && Number.isFinite(confidence) ? confidence.toFixed(2) : "n/a";
   const detail = [reasoningEffort?.toLowerCase(), `confidence ${certainty}`].filter(Boolean).join(" · ");
-  const id = `jev-${randomUUID()}`;
+  const id = `msg_jev-${randomUUID()}`;
   const label = modelLabel.toLowerCase().replace(/-(?=[a-z])/g, " ");
   const text = `[jev] ${action} ${label} (${detail})`;
   const item = {
@@ -161,32 +162,41 @@ export async function startCodexProxy({
 } = {}) {
   const states = new Map();
   const revisions = new Map();
-  const models = new Map();
-  let catalogRequest;
-  const rememberCatalog = catalog => {
+  const catalogs = new Map();
+  const catalogFor = req => {
+    const clientVersion = new URL(req.url, "http://localhost").searchParams.get("client_version") ??
+      req.headers["user-agent"]?.match(/\/(\d+\.\d+\.\d+)(?:[-+\s]|$)/)?.[1];
+    const account = req.headers["chatgpt-account-id"] || req.headers.authorization || "";
+    const key = createHash("sha256").update(JSON.stringify([account, clientVersion])).digest("hex");
+    if (!catalogs.has(key)) catalogs.set(key, { models: new Map(), clientVersion, loaded: false });
+    return catalogs.get(key);
+  };
+  const rememberCatalog = (catalog, entry) => {
     if (!Array.isArray(catalog?.models)) throw new Error("Invalid model catalog");
     addJevModel(catalog);
-    models.clear();
-    for (const model of catalog.models) models.set(model.slug, model);
+    entry.models.clear();
+    for (const model of catalog.models) entry.models.set(model.slug, model);
+    entry.loaded = true;
     return catalog;
   };
-  const ensureCatalog = headers => {
-    if (models.size) return;
+  const ensureCatalog = (entry, headers) => {
+    if (entry.loaded) return;
     // Desktop can reuse its own catalog after the bridge restarts. Fetch once
     // with the current account's auth instead of guessing supported efforts.
-    return catalogRequest ??= (async () => {
+    return entry.request ??= (async () => {
       const url = new URL(`${chatgptBaseURL.replace(/\/$/, "")}/models`);
-      const clientVersion = headers["user-agent"]?.match(/\/(\d+\.\d+\.\d+)(?:[-+\s]|$)/)?.[1];
-      if (clientVersion) url.searchParams.set("client_version", clientVersion);
+      if (entry.clientVersion) url.searchParams.set("client_version", entry.clientVersion);
       const response = await fetch(url, {
         headers: Object.fromEntries(["authorization", "chatgpt-account-id", "user-agent"]
           .filter(key => headers[key]).map(key => [key, headers[key]])),
         signal: AbortSignal.timeout(THRESHOLDS.jevDeadlineMs),
       });
       if (!response.ok) throw new Error(`Model catalog returned ${response.status}`);
-      rememberCatalog(await response.json());
+      const catalog = await response.json();
+      // An explicit refresh may have supplied a newer catalog during this cold fetch.
+      if (!entry.loaded) rememberCatalog(catalog, entry);
     })().catch(error => debug(`using cold-start defaults: ${error.message}`))
-      .finally(() => { catalogRequest = undefined; });
+      .finally(() => { entry.request = undefined; });
   };
 
   const server = http.createServer((req, res) => {
@@ -194,6 +204,8 @@ export async function startCodexProxy({
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", async () => {
+      const catalog = catalogFor(req);
+      const models = catalog.models;
       let out = Buffer.concat(chunks);
       let routing;
       let remember;
@@ -228,9 +240,9 @@ export async function startCodexProxy({
             writeFileSync(`${process.env.JEV_DUMP}.${Date.now()}.json`, JSON.stringify(body, null, 2));
           }
           if (body.model === CODEX_AUTO_MODEL) {
-            await ensureCatalog(req.headers);
+            await ensureCatalog(catalog, req.headers);
             const responsesLite = req.headers["x-openai-internal-codex-responses-lite"] === "true";
-            const candidates = codexModels(models, responsesLite).filter((model) =>
+            const candidates = (catalog.loaded && !models.size ? [] : codexModels(models, responsesLite)).filter((model) =>
               model.tier !== "fable" || availableTiers().includes("fable"),
             );
             const contextEstimate = estimateContext(previous ? { ...body, model: previous.model,
@@ -250,13 +262,14 @@ export async function startCodexProxy({
             const continuation = Boolean(previous && (sameTurn || !prompt));
             const routingPrompt = prompt ?? previous?.prompt;
             const conversation = codexRoutingContext(body, undefined, routingPrompt);
+            const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
+            const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
             const evidenceHash = createHash("sha256").update(JSON.stringify({ prompt: routingPrompt, conversation,
-              effort: body.reasoning?.effort, profiles: profiles.map(profile => profile.id) })).digest("hex");
+              effort: body.reasoning?.effort, questions: { ...QUESTIONS, profile: questionForProfiles(options) },
+              asOf: PROFILE_DATA.asOf })).digest("hex");
             const changed = evidenceHash !== previous?.evidenceHash || (turnId && !sameTurn);
             let selected = current;
             if (isTurn && routingPrompt && changed && !explaining) {
-              const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
-              const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
               const jev = await route({ prompt: routingPrompt, current, contextTokens, contextEstimate, profiles: options,
                 previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation });
               const cachedPrefixTokens = reusableCacheTokens({ ...body, model: current.model,
@@ -374,8 +387,9 @@ export async function startCodexProxy({
             response.on("end", () => {
               let data = Buffer.concat(body);
               try {
-                const catalog = rememberCatalog(JSON.parse(data.toString()));
-                data = Buffer.from(JSON.stringify(catalog));
+                if (response.statusCode < 200 || response.statusCode >= 300) throw new Error(`Model catalog returned ${response.statusCode}`);
+                const extended = rememberCatalog(JSON.parse(data.toString()), catalog);
+                data = Buffer.from(JSON.stringify(extended));
                 delete responseHeaders["content-length"];
               } catch (err) {
                 debug(`could not extend Codex model catalog: ${err.message}`);

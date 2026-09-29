@@ -28,6 +28,8 @@ export function codexRoutingContext(body, mode = routingContextMode(), currentRe
   if (mode === "full" && body.instructions) entries.push({ role: "system", text: body.instructions });
   if (mode === "full" && body.tools?.length) entries.push({ type: "available_tools", tools: body.tools });
   for (const item of input) {
+    // Codex preserves standard message IDs; routing notices are not task evidence.
+    if (item.role === "assistant" && item.phase === "commentary" && item.id?.startsWith("msg_jev-")) continue;
     if (item.type === "additional_tools") {
       if (mode === "full") entries.push({ type: item.type, tools: item.tools });
     } else if (["function_call", "custom_tool_call"].includes(item.type)) {

@@ -86,8 +86,8 @@ export const QUESTIONS = {
   reasoning_gain: choice(
     [WORK_SCOPE, "How much useful reasoning remains within that scope? Judge intellectual work, not message length or the difficulty of excluded or completed work."],
     {
-      routine: "The action is fully specified or the answer is directly observable. Further deliberation has little value; this does not describe a correctness or safety review.",
-      considered: "Implementation or interpretation needs ordinary reasoning and checking, with no unresolved difficult causal or correctness question.",
+      routine: "Directly report observed facts or perform an elementary transformation; no substantive interpretation, interacting constraints or correctness review remains.",
+      considered: "Execute, implement or interpret rules and edge cases with reasoning and verification, even if the approach is already specified.",
       deep: "An unresolved cause, interacting constraints, difficult correctness argument or consequential judgment needs sustained reasoning. Even a one-line change can require this.",
       unknown: "The evidence does not establish the required depth. Missing evidence must not be treated as a simple task.",
     },
@@ -111,6 +111,7 @@ export const questionForProfiles = (profiles) =>
       WORK_SCOPE,
       "Select the model-and-reasoning pair that can perform the remaining authorized work correctly and reliably in one pass. Never sacrifice required quality to reduce cost.",
       "First assess ambiguity, depth, tools, consequences of error, and task-specific capability. Only among sufficiently capable pairs prefer lower total completion cost, including input, cached input, reasoning, answer tokens, tools, and retries.",
+      "Judge first-pass reliability before cost. Executing interacting constraints or checking edge cases is reasoning work even when the plan is explicit. Prefer a cheaper pair only when its reliability for that work is comparable to stronger measured pairs; a clear task or low price alone does not establish adequacy.",
       "For unresolved failures, formal guarantees, or work where adequacy is uncertain, prioritize stronger measured capability. A low price does not establish that a pair is adequate. Higher Intelligence Index scores mean stronger aggregate measured performance, not a percentage of tasks solved.",
       "Benchmark scores and costs are aggregate evidence, not task-specific guarantees or success probabilities. A dominated pair may still fit a specialized task. Missing measurements do not mean low capability or zero cost.",
       "Compare complete pairs: stronger models at low effort may be more efficient than weaker models at high effort. Small models at high effort can handle substantive work. Use low effort for straightforward tasks; reserve deeper reasoning for work that needs it.",
