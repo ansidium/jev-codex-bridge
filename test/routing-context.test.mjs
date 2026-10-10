@@ -153,7 +153,6 @@ test("Jev size rejections retry with more compact evidence; other validation fai
       res.end(JSON.stringify({ model: "jev-test", answers: {
         profile: { choice: "test@low", confidence: 0.95 },
         requested_model: { choice: "test", confidence: 0.99 },
-        task_complexity: { score: 8 }, reasoning_required: { score: 8 }, tool_complexity: { score: 7 },
       }, usage: { input_tokens: 100, output_tokens: 10 } }));
     });
   });

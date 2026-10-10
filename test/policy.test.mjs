@@ -15,10 +15,9 @@ const profiles = [current, stronger, weaker];
 const base = { prompt: "refactor the parser", current, profiles };
 const choice = (profile, confidence = 0.95) => ({ choice: profile.id, confidence });
 
-test("score rubrics contain API-valid descriptions; pair choices contain measured evidence", () => {
+test("assessments contain API-valid descriptions; pair choices contain measured evidence", () => {
   for (const question of Object.values(QUESTIONS)) {
     assert(Object.values(question.criteria).every(description => typeof description === "string"));
-    if (question.type === "score") assert(question.criteria.length <= 10);
   }
   const question = questionForProfiles(profiles);
   assert.deepEqual(Object.keys(question.criteria), profiles.map(profile => profile.id));

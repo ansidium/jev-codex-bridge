@@ -1,6 +1,5 @@
 import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
-  COMPLEXITY_MAX_SCORE,
   QUESTIONS,
   questionForProfiles,
   previousRoutingContext,
@@ -38,7 +37,7 @@ export async function askJev({ prompt, current, contextTokens, contextEstimate, 
   const deadline = setTimeout(() => abort.abort(), THRESHOLDS.jevDeadlineMs);
   try {
     const mode = routingContextMode();
-    const previousRequest = previousRoutingContext(previousPrompt);
+    const previousRequest = previousPrompt === prompt ? undefined : previousRoutingContext(previousPrompt);
     if (mode === "previous") conversation = undefined;
     const previousIncluded = previousRequest && conversation?.includes(JSON.stringify(previousRequest).slice(1, -1));
     const original = {
@@ -66,9 +65,8 @@ export async function askJev({ prompt, current, contextTokens, contextEstimate, 
         budget = Math.floor(budget / 2);
       }
     }
-    const { profile: answer, task_complexity, reasoning_required, tool_complexity } = result.answers;
     return {
-      ...answer,
+      ...result.answers.profile,
       request,
       response: result,
       assessment: {
@@ -76,9 +74,6 @@ export async function askJev({ prompt, current, contextTokens, contextEstimate, 
         workStatus: result.answers.work_status ?? null,
       },
       metrics: {
-        taskComplexity: task_complexity.score / COMPLEXITY_MAX_SCORE,
-        reasoningRequired: reasoning_required.score / COMPLEXITY_MAX_SCORE,
-        toolComplexity: tool_complexity.score / COMPLEXITY_MAX_SCORE,
         contextSize: current.contextWindow ? Math.min(contextTokens / current.contextWindow, 1) : null,
       },
       ms: Date.now() - started,

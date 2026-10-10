@@ -1,5 +1,5 @@
 // Every routing decision knob lives here, so the whole policy is reviewable in one file.
-import { choice, score } from "@typesafe-ai/sdk";
+import { choice } from "@typesafe-ai/sdk";
 
 /**
  * Legacy Jev policy tier names, cheapest first. Concrete Codex model identifiers and
@@ -47,21 +47,6 @@ export function previousRoutingContext(prompt, budget = Number(process.env.JEV_P
   return prompt.slice(0, head) + marker + prompt.slice(-tail);
 }
 
-const COMPLEXITY_SCALE = [
-  "None",
-  "Very low",
-  "Low",
-  "Some",
-  "Moderate",
-  "Moderate to high",
-  "High",
-  "Very high",
-  "Severe",
-  "Extreme",
-];
-
-export const COMPLEXITY_MAX_SCORE = COMPLEXITY_SCALE.length - 1;
-
 const WORK_SCOPE = [
   "First establish the current authorized scope.",
   "When session.continuation is false, request is the latest user instruction and supersedes conflicting earlier instructions in conversation or previous_request.",
@@ -71,18 +56,6 @@ const WORK_SCOPE = [
 ].join(" ");
 
 export const QUESTIONS = {
-  task_complexity: score(
-    "How complex is the unfinished work in `request`, given `conversation` and `previous_request`, including ambiguity, scope, and consequences of errors?",
-    COMPLEXITY_SCALE,
-  ),
-  reasoning_required: score(
-    "How much reasoning does the unfinished work in `request` require, given the constraints, failed attempts and results in `conversation` and `previous_request`?",
-    COMPLEXITY_SCALE,
-  ),
-  tool_complexity: score(
-    "How complex is the tool use needed for `request`, given the task and tool results in `conversation` and `previous_request`, from no tools to many coordinated or stateful operations?",
-    COMPLEXITY_SCALE,
-  ),
   reasoning_gain: choice(
     [WORK_SCOPE, "How much useful reasoning remains within that scope? Judge intellectual work, not message length or the difficulty of excluded or completed work."],
     {

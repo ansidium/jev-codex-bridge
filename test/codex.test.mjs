@@ -392,9 +392,6 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
         request: { state: { request: "use sol to debug this race" } },
         response: { answers: { model: { choice: "gpt-5.6-sol@low", confidence: 0.91 } } },
         metrics: {
-          taskComplexity: 0.82,
-          reasoningRequired: 0.91,
-          toolComplexity: 0.64,
           contextSize: 0.31,
         },
       };
@@ -429,7 +426,7 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   assert.equal(readStatus(statusId).prompt, "use sol to debug this race");
   assert.equal(readStatus(statusId).jev.request.state.request, "use sol to debug this race");
   assert.equal(readStatus(statusId).history.length, 1);
-  assert.equal(readStatus(statusId).metrics.reasoningRequired, 0.91);
+  assert.equal(readStatus(statusId).metrics.contextSize, 0.31);
   assert.equal(readStatus(statusId).hasPriorModel, false);
   assert.equal(readStatus(statusId).modelLabel, "GPT-5.6-Sol");
   assert(response.indexOf("response.created") < response.indexOf("[jev] selected"));
@@ -465,7 +462,7 @@ test("proxy preserves Codex auth, picker, routing, and native decision output", 
   });
   assert.equal(routeCalls, 1);
   assert.equal(seen[3].body.model, "gpt-5.6-sol");
-  assert.equal(readStatus(statusId).metrics.reasoningRequired, 0.91);
+  assert.equal(readStatus(statusId).metrics.contextSize, 0.31);
 
   for (const model of catalog.models.filter(model => model.slug !== "jev-router")) {
     for (const effort of ["low", "high"]) {

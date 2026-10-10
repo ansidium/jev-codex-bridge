@@ -11,9 +11,10 @@ Approval or "continue" inherits unfinished work. Explicit pauses, cancellations
 and replacement tasks change the scope; completed work adds no difficulty.
 Executing a specified plan can still require reasoning and correctness checks.
 
-All six questions share one TypeSafe request: pair selection, task complexity,
-reasoning complexity, tool complexity, remaining reasoning and work status.
-The diagnostics are independent assessments, not a weighted selection formula.
+Three questions share one TypeSafe request: pair selection, remaining reasoning
+and work status. The latter two independently protect unfinished work and
+uncertain capability reductions. A previous request identical to the current
+one is not sent again.
 
 Each pair includes catalog capabilities, observed intelligence, measured task
 cost and API rates. Jev prioritizes reliable completion, then cost among capable
@@ -116,12 +117,14 @@ The package ships this snapshot and does not scrape benchmarks during routing.
 Scores are aggregate observations, not task-specific success probabilities.
 Weighted task cost is not a raw token price or cost per successful task.
 
-The September 30 comparison tested 11 tasks twice per version with short and
-long histories. Independent answer checks passed 44/44 for the revised router
-and 43/44 for the preceding version. With the Sol/Astra allowlist and identified
-notices excluded, Jev input tokens fell 49.9% on short histories and 6.4% on long
-histories in this sample. Experiments remain outside the repository.
+The October 10 comparison tested 20 tasks twice per version with short and
+long histories. Independent answer checks passed 80/80 for each version;
+selected pairs matched. Removing unused questions and duplicate previous
+requests reduced Jev input tokens by 9.5% on short histories and 1.0% on long
+histories, and output tokens by 14.5% in both. Experiments remain outside the
+repository.
 
-Offline checks covered 4,800 policy combinations. Native Codex checks covered
-Sol/Astra switches, automatic compaction and context recall.
+Offline checks covered 4,800 policy combinations and 48 request combinations.
+Native Codex checks covered tools, steering, interruption, resume and attach,
+as well as Sol/Astra switches, automatic compaction and context recall.
 These checks do not establish a general accuracy, latency or savings guarantee.

@@ -13,14 +13,12 @@ test("formats the last routing decision", () => {
       response: { answers: { model_tier: { choice: "sonnet" } } },
     },
     metrics: {
-      taskComplexity: 0.82,
-      reasoningRequired: 0.91,
-      toolComplexity: 0.64,
       contextSize: 0.31,
     },
   });
 
-  assert.match(output, /Task complexity     0\.82/);
+  assert.match(output, /Context size        0\.31/);
+  assert.doesNotMatch(output, /Task complexity|Reasoning required|Tool complexity/);
   assert.match(output, /Prompt: Explain the router/);
   assert.match(output, /Current tier: HAIKU/);
   assert.match(output, /Context tokens: 6200/);
