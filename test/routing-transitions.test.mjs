@@ -33,7 +33,7 @@ async function fixture(t, route, { cli = false, respond, models = ["gpt-5.6-luna
   });
   await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
   const endpoint = `http://127.0.0.1:${upstream.address().port}`;
-  const options = { apiBaseURL: endpoint, chatgptBaseURL: endpoint, statusId: cli ? record : "",
+  const options = { apiBaseURL: endpoint, chatgptBaseURL: endpoint, statusId: cli ? record : "", reassessTools: true,
     route: args => { calls.push(args); return route(args); },
     authorize: req => { disconnected.push(new Promise(resolve => req.socket.once("close", resolve))); return true; } };
   let proxy = await startCodexProxy(options);

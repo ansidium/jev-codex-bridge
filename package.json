@@ -1,6 +1,6 @@
 {
   "name": "jev-codex-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Jev model and reasoning-effort routing for Codex Desktop and CLI",
   "type": "module",
   "private": true,
@@ -10,5 +10,5 @@
   "bin": { "jev-bridge": "bin/jev-bridge.mjs", "jev-codex": "bin/jev-codex.mjs", "jev-explain": "bin/jev-explain.mjs" },
   "files": ["bin", "src", "data", "scripts", "skills", "test", "docs", "README.md", "NOTICE", "LICENSE", "npm-shrinkwrap.json"],
   "scripts": { "test": "node --test \"test/**/*.test.mjs\"", "check": "node scripts/check-source.mjs" },
-  "dependencies": { "@typesafe-ai/sdk": "^0.6.0", "smol-toml": "^1.4.2" }
+  "dependencies": { "@typesafe-ai/sdk": "^0.7.0", "smol-toml": "^1.4.2" }
 }

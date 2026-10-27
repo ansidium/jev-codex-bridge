@@ -13,7 +13,7 @@ const catalog = new Map([
 
 test("GPT-6 defaults use their own evidence and catalog effort capabilities", () => {
   assert.deepEqual(codexModels().map(model => model.id),
-    ["gpt-6-luna", "gpt-5.6-terra", "gpt-6.1-sol", "gpt-6-astra"]);
+    ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-astra"]);
   const models = new Map([
     ["jev-router", catalog.get("jev-router")],
     ["gpt-6-sol", { supported_reasoning_levels: levels(["low", "medium", "high", "xhigh", "max", "ultra"]) }],
@@ -84,8 +84,8 @@ test("unfamiliar models and effort names use the catalog without inherited bench
 test("frontier is advisory: ties, unmeasured efforts and specialized choices remain eligible", () => {
   const profiles = codexProfiles(codexModels(), new Map(), "max");
   const frontier = frontierProfiles(profiles);
-  assert(profiles.some(p => p.model === "gpt-5.6-terra"));
-  assert(!frontier.some(p => p.id === "gpt-5.6-terra@max"));
+  assert(profiles.some(p => p.model === "gpt-6.1-terra"));
+  assert(!frontier.some(p => p.id === "gpt-6.1-terra@max"));
   assert(frontier.some(p => p.id === "gpt-6-astra@max"));
   assert(frontier.some(p => p.id === "gpt-6-astra@xhigh"));
   const unknown = { id: "future@deep" };
@@ -101,8 +101,8 @@ test("published observations have provenance and finite nonnegative measurements
     assert.match(model.source, /^https:\/\//);
     for (const observation of Object.values(model.efforts)) {
       assert(Number.isFinite(observation.intelligence) && observation.intelligence >= 0);
-      assert(Number.isFinite(observation.aaBriefcaseElo));
-      assert(observation.terminalBench4SuccessRate >= 0 && observation.terminalBench4SuccessRate <= 1);
+      if (observation.aaBriefcaseElo !== undefined) assert(Number.isFinite(observation.aaBriefcaseElo));
+      if (observation.terminalBench4SuccessRate !== undefined) assert(observation.terminalBench4SuccessRate >= 0 && observation.terminalBench4SuccessRate <= 1);
       if (observation.costPerTaskUSD !== undefined) {
         assert(Number.isFinite(observation.costPerTaskUSD) && observation.costPerTaskUSD > 0);
       }

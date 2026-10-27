@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { codexRoutingContext, contextExcerpt, conversationExcerpt, fitRoutingState } from "../src/routing-context.mjs";
 import { askJev } from "../src/router.mjs";
+import { zstdDecompressSync } from "node:zlib";
 import { jevDecisionEvents } from "../src/codex-proxy.mjs";
 
 test("task context carries constraints, failed tools, summaries and media indicators", () => {
@@ -143,7 +144,8 @@ test("Jev size rejections retry with more compact evidence; other validation fai
     const chunks = [];
     req.on("data", chunk => chunks.push(chunk));
     req.on("end", () => {
-      seen.push(JSON.parse(Buffer.concat(chunks)));
+      const data = Buffer.concat(chunks);
+      seen.push(JSON.parse(req.headers["content-encoding"] === "zstd" ? zstdDecompressSync(data) : data));
       res.setHeader("content-type", "application/json");
       if (responseStatus) {
         res.statusCode = responseStatus;

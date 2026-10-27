@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { readJson, saveJson } from "./installation.mjs";
 
 const digest = text => createHash("sha256").update(text).digest("hex");
 export function configureCodex(path, home, port) {
-  const original = existsSync(path) ? readFileSync(path, "utf8") : "";
+  // Named profiles are opt-in. Never replace Desktop's native provider or model.
+  path = join(dirname(path), "jev.config.toml");
+  const existed = existsSync(path);
+  const original = existed ? readFileSync(path, "utf8") : "";
   const data = parse(original);
   data.model = "jev-router";
   data.model_provider = "jev";
@@ -19,7 +22,7 @@ export function configureCodex(path, home, port) {
   writeFileSync(backup, original, { mode: 0o600 });
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text, { mode: 0o600 });
-  saveJson(join(home, "codex-config.json"), { path, backup, installedHash: digest(text) });
+  saveJson(join(home, "codex-config.json"), { path, backup, existed, installedHash: digest(text) });
   return backup;
 }
 export function restoreCodex(home) {
@@ -27,6 +30,8 @@ export function restoreCodex(home) {
   if (digest(readFileSync(record.path, "utf8")) !== record.installedHash) {
     throw new Error(`Codex configuration changed after setup; restore the desired values manually from ${record.backup}.`);
   }
-  writeFileSync(record.path, readFileSync(record.backup), { mode: 0o600 });
+  if (record.existed === false) rmSync(record.path);
+  else writeFileSync(record.path, readFileSync(record.backup), { mode: 0o600 });
+  rmSync(join(home, "codex-config.json"));
   return record.path;
 }

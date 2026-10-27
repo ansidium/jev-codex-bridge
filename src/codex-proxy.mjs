@@ -16,7 +16,7 @@ const API_BASE_URL = "https://api.openai.com/v1";
 export const CODEX_AUTO_MODEL = "jev-router";
 const DEFAULT_MODELS = {
   haiku: "gpt-6-luna",
-  sonnet: "gpt-5.6-terra",
+  sonnet: "gpt-6.1-terra",
   opus: "gpt-6.1-sol",
   fable: "gpt-6-astra",
 };
@@ -159,6 +159,7 @@ export async function startCodexProxy({
   route = askJev,
   statusId = "",
   authorize = () => true,
+  reassessTools = process.env.JEV_CODEX_REASSESS_TOOLS === "1",
 } = {}) {
   const states = new Map();
   const revisions = new Map();
@@ -201,6 +202,8 @@ export async function startCodexProxy({
 
   const server = http.createServer((req, res) => {
     if (!authorize(req)) { res.writeHead(403).end(); return; }
+    const classification = new AbortController();
+    res.once("close", () => { if (!res.writableEnded) classification.abort(); });
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", async () => {
@@ -260,49 +263,59 @@ export async function startCodexProxy({
             const current = fallbackProfile(profiles, priorModel ?? codexModelOf("opus"), previous?.reasoningEffort);
             const explaining = latestPrompt.includes("<jev-explain>") || /^\$jev-explain\b/i.test(latestPrompt);
             const continuation = Boolean(previous && (sameTurn || !prompt));
-            const routingPrompt = prompt ?? previous?.prompt;
-            const conversation = codexRoutingContext(body, undefined, routingPrompt);
-            const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
-            const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
-            const evidenceHash = createHash("sha256").update(JSON.stringify({ prompt: routingPrompt, conversation,
-              effort: body.reasoning?.effort, questions: { ...QUESTIONS, profile: questionForProfiles(options) },
-              asOf: PROFILE_DATA.asOf })).digest("hex");
-            const changed = evidenceHash !== previous?.evidenceHash || (turnId && !sameTurn);
+            // A compacted replacement of history is a continuation, not a new
+            // instruction. Steering appends to the original request in this turn.
+            const steering = latestPrompt && latestPrompt !== previous?.prompt && (!sameTurn ||
+              codexInputItems(body).some(item => item.role === "user" && cleanPrompt(textOf(item.content)) === previous?.prompt));
+            const routingPrompt = prompt ?? (steering ? latestPrompt : previous?.prompt);
+            let evidenceHash = previous?.evidenceHash;
             let selected = current;
-            if (isTurn && routingPrompt && changed && !explaining) {
-              const jev = await route({ prompt: routingPrompt, current, contextTokens, contextEstimate, profiles: options,
-                previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation });
-              const cachedPrefixTokens = reusableCacheTokens({ ...body, model: current.model,
-                reasoning: { ...body.reasoning, effort: current.effort } }, previous?.cache);
-              const decision = decide({ jev, current, profiles, cachedPrefixTokens,
-                hasPriorModel: Boolean(priorModel), continuation });
-              selected = decision.profile;
-              announce = !continuation || decision.changed;
-              routing = {
-                prompt: routingPrompt,
-                turnId,
-                conversationKey: key,
-                evidenceHash,
-                trigger: continuation ? "context-change" : "user",
-                previousModel: current.model,
-                previousReasoningEffort: current.effort,
-                hasPriorModel: Boolean(priorModel),
-                changed: decision.changed,
-                tier: selected.tier,
-                model: selected.model,
-                modelLabel: models.get(selected.model)?.display_name ?? selected.model,
-                profile: selected.id,
-                evidence: { asOf: PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
-                  measurement: selected.benchmark ?? null },
-                confidence: jev?.confidence ?? null,
-                metrics: jev?.metrics ?? null,
-                assessment: jev?.assessment ?? null,
-                reason: decision.reason,
-                cachedPrefixTokens,
-                contextEstimate,
-                jev: jev ? { request: jev.request, response: jev.response } : null,
-                at: Date.now(),
-              };
+            // Like upstream Jev Router, classify fresh instructions once. Tools
+            // keep the selected pair unless continuous reassessment was requested.
+            if (isTurn && routingPrompt && !explaining && (reassessTools || prompt || steering)) {
+              const conversation = codexRoutingContext(body, undefined, routingPrompt);
+              const frontier = new Set(frontierProfiles(profiles).map(profile => profile.id));
+              const options = profiles.map(profile => ({ ...profile, onFrontier: frontier.has(profile.id) }));
+              evidenceHash = createHash("sha256").update(JSON.stringify({ prompt: routingPrompt, conversation,
+                effort: body.reasoning?.effort, questions: { ...QUESTIONS, profile: questionForProfiles(options) },
+                asOf: PROFILE_DATA.asOf })).digest("hex");
+              const changed = evidenceHash !== previous?.evidenceHash || (turnId && !sameTurn);
+              if (changed) {
+                const jev = await route({ prompt: routingPrompt, current, contextTokens, contextEstimate, profiles: options,
+                  previousPrompt: previous?.prompt ?? codexPreviousUserPrompt(body), conversation, continuation,
+                  signal: classification.signal });
+                const cachedPrefixTokens = reusableCacheTokens({ ...body, model: current.model,
+                  reasoning: { ...body.reasoning, effort: current.effort } }, previous?.cache);
+                const decision = decide({ jev, current, profiles, cachedPrefixTokens,
+                  hasPriorModel: Boolean(priorModel), continuation });
+                selected = decision.profile;
+                announce = !continuation || decision.changed;
+                routing = {
+                  prompt: routingPrompt,
+                  turnId,
+                  conversationKey: key,
+                  evidenceHash,
+                  trigger: continuation ? "context-change" : "user",
+                  previousModel: current.model,
+                  previousReasoningEffort: current.effort,
+                  hasPriorModel: Boolean(priorModel),
+                  changed: decision.changed,
+                  tier: selected.tier,
+                  model: selected.model,
+                  modelLabel: models.get(selected.model)?.display_name ?? selected.model,
+                  profile: selected.id,
+                  evidence: { asOf: selected.asOf ?? PROFILE_DATA.asOf, benchmark: PROFILE_DATA.benchmark.name,
+                    measurement: selected.benchmark ?? null },
+                  confidence: jev?.confidence ?? null,
+                  metrics: jev?.metrics ?? null,
+                  assessment: jev?.assessment ?? null,
+                  reason: decision.reason,
+                  cachedPrefixTokens,
+                  contextEstimate,
+                  jev: jev ? { request: jev.request, response: jev.response } : null,
+                  at: Date.now(),
+                };
+              }
             }
             body.model = selected.model;
             if (!compactEndpoint && selected.effort) body.reasoning = { ...body.reasoning, effort: selected.effort };

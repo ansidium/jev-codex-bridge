@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activate, readJson, rollbackInstallation, run, saveJson, stageLocal, treeHash, updateInstallation, withLock } from "../src/installation.mjs";
 import { configureCodex, restoreCodex } from "../src/desktop-config.mjs";
 import { parse } from "smol-toml";
-import { updateTime } from "../src/bridge-cli.mjs";
+import { installMode, updateTime } from "../src/bridge-cli.mjs";
 
 test("update scheduling accepts user time and rejects malformed clock values", () => {
   assert.equal(updateTime("00:00"), "00:00");
@@ -69,25 +69,40 @@ test("update validates an immutable revision before changing the active pointer"
   assert.equal(result.status, "updated");
   assert.equal(updateInstallation(home, { repository: upstream }).status, "current");
 });
-test("Codex setup preserves unrelated settings and exact original backup", t => {
+test("CLI installation is lightweight; Desktop service and profile require opt-in", () => {
+  assert.deepEqual(installMode({}), { service: false, configure: false });
+  assert.deepEqual(installMode({ desktop: true }), { service: true, configure: true });
+  assert.deepEqual(installMode({ desktop: true, "no-service": true }), { service: false, configure: true });
+  assert.deepEqual(installMode({ desktop: true, "no-config": true }), { service: true, configure: false });
+});
+test("Codex setup writes only the optional profile and preserves the native configuration byte for byte", t => {
   const home = workspace(t), path = join(home, "codex", "config.toml");
   mkdirSync(join(home, "codex"));
   const original = '# keep this comment\nmodel = "manual"\n[features]\nmulti_agent = true\n[projects."C:\\\\Example"]\ntrust_level = "trusted"\n';
   writeFileSync(path, original);
   const backup = configureCodex(path, home, 45678);
-  const configured = parse(readFileSync(path, "utf8"));
-  assert.equal(configured.features.multi_agent, true);
-  assert.deepEqual(configured.projects, parse(original).projects);
+  const profile = join(home, "codex", "jev.config.toml");
+  const configured = parse(readFileSync(profile, "utf8"));
+  assert.equal(readFileSync(path, "utf8"), original);
+  assert.equal(configured.model, "jev-router");
+  assert.equal(configured.model_provider, "jev");
   assert.equal(configured.model_providers.jev.base_url, "http://127.0.0.1:45678");
-  assert.equal(readFileSync(backup, "utf8"), original);
+  assert.equal(readFileSync(backup, "utf8"), "");
+  restoreCodex(home);
+  assert.equal(readFileSync(path, "utf8"), original);
+  assert.equal(existsSync(profile), false);
+  assert.equal(existsSync(join(home, "codex-config.json")), false);
+  // Restoring must not leave a stale setup record that blocks reconfiguration.
+  configureCodex(path, home, 45678);
   restoreCodex(home);
   assert.equal(readFileSync(path, "utf8"), original);
 });
 test("configuration restore never overwrites edits made after setup", t => {
   const home = workspace(t), path = join(home, "config.toml");
   configureCodex(path, home, 45678);
-  const edited = readFileSync(path, "utf8") + '\n# later user edit\n';
-  writeFileSync(path, edited);
+  const profile = join(home, "jev.config.toml");
+  const edited = readFileSync(profile, "utf8") + '\n# later user edit\n';
+  writeFileSync(profile, edited);
   assert.throws(() => restoreCodex(home), /changed after setup/);
-  assert.equal(readFileSync(path, "utf8"), edited);
+  assert.equal(readFileSync(profile, "utf8"), edited);
 });

@@ -28,7 +28,7 @@ export const THRESHOLDS = {
   jevTimeoutMs: 5000,
   jevDeadlineMs: 10000,
   jevMaxRetries: 1,
-  /** Jev 1.13: state + longest question, and state + all questions, respectively. */
+  /** Jev 1.14: state + longest question, and state + all questions, respectively. */
   jevStateQuestionTokens: 32000,
   jevRequestTokens: 64000,
 };
@@ -93,9 +93,10 @@ export const questionForProfiles = (profiles) =>
       "Ultra includes automatic delegation; use it when coordinated parallel work benefits the requested work.",
     ],
     Object.fromEntries(
-      profiles.map(({ id, model, effort, contextWindow, reasoningFamily, benchmark, rates, onFrontier }) => [
+      profiles.map(({ id, model, effort, contextWindow, reasoningFamily, strengths, benchmark, rates, onFrontier }) => [
         id,
         { model, effort: effort ?? "Model default", context_window: contextWindow, reasoning_family: reasoningFamily,
+          ...(strengths ? { strengths } : {}),
           ...(benchmark ? { benchmark: { intelligence: benchmark.intelligence, costPerTaskUSD: benchmark.costPerTaskUSD },
             on_price_quality_frontier: onFrontier } : { benchmark: "Not measured" }),
           ...(rates ? { usd_per_million_tokens: rates } : {}) },

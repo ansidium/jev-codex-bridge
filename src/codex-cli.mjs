@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants, copyFileSync, mkdirSync } from "node:fs";
+import { accessSync, constants, copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CODEX_AUTO_MODEL, startCodexProxy } from "./codex-proxy.mjs";
+import { resolveHome } from "./installation.mjs";
 
 const PROVIDER = "jev";
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -16,12 +17,13 @@ export function installCodexSkill(home = homedir()) {
   return target;
 }
 
-export function loadEnv() {
-  for (const file of [
-    join(process.cwd(), ".env"),
-    join(homedir(), ".jev-router.env"),
-    join(homedir(), ".jev-claude.env"),
-  ]) {
+export function loadEnv({ cwd = process.cwd(), userHome = homedir(), bridgeHome = resolveHome() } = {}) {
+  const files = [join(cwd, ".env"), join(userHome, ".jev-router.env"), join(userHome, ".jev-claude.env")];
+  try {
+    const { keyFile } = JSON.parse(readFileSync(join(bridgeHome, "settings.json"), "utf8"));
+    if (keyFile) files.push(keyFile);
+  } catch { /* A standalone CLI installation needs no managed service. */ }
+  for (const file of files) {
     try {
       process.loadEnvFile(file);
     } catch {
@@ -56,7 +58,7 @@ export const codexArgs = (baseURL, args) => {
   const execCommand = args[0] === "exec" || args[0] === "e" ? args[0] : null;
   return [
   ...(execCommand ? [execCommand] : []),
-  ...(args.some((arg) => arg === "--model" || arg === "-m" || arg.startsWith("--model="))
+  ...(args.some((arg) => arg === "--model" || arg === "-m" || arg.startsWith("--model=") || /^-m.+/.test(arg))
     ? []
     : ["--model", CODEX_AUTO_MODEL]),
   "--config",

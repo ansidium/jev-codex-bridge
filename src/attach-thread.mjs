@@ -5,12 +5,15 @@ import { CODEX_AUTO_MODEL } from "./codex-proxy.mjs";
 import pkg from "../package.json" with { type: "json" };
 
 /** Change a stored thread through Codex itself, without starting a model turn. */
-export async function attachThread(threadId, { codexHome, command = resolveCodex(), timeout = 30_000 } = {}) {
+export async function attachThread(threadId, { codexHome, providerConfig, command = resolveCodex(), timeout = 30_000 } = {}) {
   if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(threadId ?? "")) {
     throw new Error("Provide a Codex thread ID (the UUID from its link).");
   }
   if (!command) throw new Error("Codex is not on PATH.");
-  const child = spawn(command.file, [...command.prefix, "app-server", "--stdio"], {
+  const overrides = Object.entries(providerConfig ?? {}).flatMap(([key, value]) => [
+    "--config", `model_providers.jev.${key}=${JSON.stringify(value)}`,
+  ]);
+  const child = spawn(command.file, [...command.prefix, "app-server", "--stdio", ...overrides], {
     shell: command.shell, windowsHide: true, stdio: ["pipe", "pipe", "ignore"],
     env: { ...process.env, ...(codexHome ? { CODEX_HOME: codexHome } : {}) },
   });

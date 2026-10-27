@@ -32,7 +32,7 @@ test("native compaction preserves the selected model and routing state across re
   t.after(() => upstream.close());
   const endpoint = `http://127.0.0.1:${upstream.address().port}`;
   const routeCalls = [];
-  const options = { chatgptBaseURL: endpoint, apiBaseURL: endpoint,
+  const options = { chatgptBaseURL: endpoint, apiBaseURL: endpoint, reassessTools: true,
     route: async args => { routeCalls.push(args); return { choice: "gpt-6-astra@low", confidence: 0.99 }; },
   };
   let proxy = await startCodexProxy(options);

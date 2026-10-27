@@ -12,7 +12,7 @@ import { attachThread } from "./attach-thread.mjs";
 import { parse } from "smol-toml";
 
 const help = `Jev Codex Bridge
-  install [--key-file PATH] [--port 18767] [--codex-home PATH]
+  install [--desktop] [--key-file PATH] [--port 18767] [--codex-home PATH]
           [--no-config] [--no-service] [--task-name NAME] [--update-time HH:mm]
   status | update | rollback | serve | shutdown
   service start|stop|restart|status|remove
@@ -21,14 +21,19 @@ const help = `Jev Codex Bridge
   configure | restore-config
   attach THREAD_ID [--codex-home PATH]
 All commands accept --home PATH (or JEV_BRIDGE_HOME).
-Desktop service installation uses Windows Task Scheduler. On other platforms,
-use install --no-service, then serve under your own process supervisor.
+The default install is CLI-only, with no service or global Codex changes.
+--desktop adds an opt-in jev profile and a Windows Task Scheduler service.
+On other platforms use --desktop --no-service, then serve under your supervisor.
 `;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function updateTime(value = new Date().toTimeString().slice(0, 5)) {
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error("Update time must use HH:mm (local time).");
   return value;
 }
+export const installMode = values => ({
+  service: Boolean(values.desktop && !values["no-service"]),
+  configure: Boolean(values.desktop && !values["no-config"]),
+});
 function service(home, action, time) {
   if (process.platform !== "win32") throw new Error("Service management currently requires Windows; use serve on this platform.");
   const root = readJson(join(home, "state.json")).active.root;
@@ -78,7 +83,7 @@ export async function main(args) {
   const { values, positionals } = parseArgs({ args, allowPositionals: true, options: {
     home: { type: "string" }, "key-file": { type: "string" }, port: { type: "string" },
     "codex-home": { type: "string" }, "task-name": { type: "string" }, "no-config": { type: "boolean" },
-    "no-service": { type: "boolean" }, automatic: { type: "boolean" }, help: { type: "boolean" },
+    "no-service": { type: "boolean" }, desktop: { type: "boolean" }, automatic: { type: "boolean" }, help: { type: "boolean" },
     "update-time": { type: "string" },
   } });
   const [command, option] = positionals;
@@ -110,6 +115,7 @@ export async function main(args) {
   }
   await withLock(home, async () => {
     if (command === "install") {
+      const mode = installMode(values);
       if (existsSync(join(home, "state.json"))) throw new Error("Already installed here; use update or choose a separate --home.");
       const port = Number(values.port ?? 18767);
       const time = updateTime(values["update-time"]);
@@ -122,10 +128,11 @@ export async function main(args) {
       const candidate = stageLocal(home);
       writeFileSync(join(home, "control.token"), randomBytes(32).toString("hex"), { mode: 0o600 });
       saveJson(join(home, "settings.json"), { port, keyFile, taskName, updateTime: time });
-      activate(home, candidate, { autoUpdate: true });
+      activate(home, candidate, { autoUpdate: Boolean(values.desktop) });
+      installCodexSkill();
       // A stable launcher follows the active pointer without holding old source open.
       writeFileSync(join(home, "launch.mjs"), `import { readFileSync } from 'node:fs';\nimport { join, dirname } from 'node:path';\nimport { fileURLToPath, pathToFileURL } from 'node:url';\nconst home = dirname(fileURLToPath(import.meta.url));\nconst { active } = JSON.parse(readFileSync(join(home, 'state.json'), 'utf8'));\nprocess.argv.push('--home', home);\nawait import(pathToFileURL(join(active.root, 'bin', 'jev-bridge.mjs')));\n`);
-      if (!values["no-service"]) {
+      if (mode.service) {
         service(home, "install");
         let ready = false;
         for (let attempt = 0; attempt < 30; attempt++) {
@@ -135,11 +142,10 @@ export async function main(args) {
         }
         if (!ready) throw new Error("Service did not become ready; Codex configuration was not changed. Inspect service.log.");
       }
-      if (!values["no-config"]) {
-        installCodexSkill();
+      if (mode.configure) {
         const path = join(resolve(values["codex-home"] ?? process.env.CODEX_HOME ?? join(homedir(), ".codex")), "config.toml");
         const backup = configureCodex(path, home, port);
-        console.log(`Codex configured; original saved to ${backup}`);
+        console.log(`Optional jev profile configured; previous profile saved to ${backup}`);
       }
       console.log(`Installed ${candidate.version} in ${home}`); return;
     }
@@ -147,12 +153,12 @@ export async function main(args) {
     if (command === "attach") {
       if (!(await health(home)).ready) throw new Error("Start the service before attaching a thread.");
       const codexHome = resolve(values["codex-home"] ?? process.env.CODEX_HOME ?? join(homedir(), ".codex"));
-      const config = parse(readFileSync(join(codexHome, "config.toml"), "utf8"));
+      const config = parse(readFileSync(join(codexHome, "jev.config.toml"), "utf8"));
       const { port } = readJson(join(home, "settings.json"));
       if (config.model_providers?.jev?.base_url !== `http://127.0.0.1:${port}`) {
         throw new Error("Configure this Codex home for the running bridge before attaching a thread.");
       }
-      console.log(JSON.stringify(await attachThread(option, { codexHome })));
+      console.log(JSON.stringify(await attachThread(option, { codexHome, providerConfig: config.model_providers.jev })));
       return;
     }
     if (command === "configure") {
@@ -161,7 +167,7 @@ export async function main(args) {
       installCodexSkill();
       const { port } = readJson(join(home, "settings.json"));
       const path = join(resolve(values["codex-home"] ?? process.env.CODEX_HOME ?? join(homedir(), ".codex")), "config.toml");
-      console.log(`Original configuration saved to ${configureCodex(path, home, port)}`); return;
+      console.log(`Previous optional profile saved to ${configureCodex(path, home, port)}`); return;
     }
     if (command === "auto-update") {
       if (!["on", "off"].includes(option)) throw new Error("Choose auto-update on or off.");

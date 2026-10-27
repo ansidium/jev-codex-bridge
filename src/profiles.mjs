@@ -11,7 +11,7 @@ export function codexProfiles(models, catalog, ceiling, contextTokens = 0, data 
     const info = catalog.get(model.id);
     const evidence = data.models[model.id];
     const levels = info?.supported_reasoning_levels?.length ? info.supported_reasoning_levels
-      : evidence ? Object.keys(evidence.efforts).map(effort => ({ effort }))
+      : evidence ? (evidence.fallbackEfforts ?? Object.keys(evidence.efforts)).map(effort => ({ effort }))
         : [{ effort: ceiling ?? info?.default_reasoning_level }];
     const order = pickerOrder?.length ? pickerOrder
       : info?.supported_reasoning_levels?.length ? levels.map(level => level.effort) : data.fallbackEffortOrder;
@@ -22,6 +22,8 @@ export function codexProfiles(models, catalog, ceiling, contextTokens = 0, data 
         id: profileKey(model.id, level.effort), model: model.id, tier: model.tier,
         effort: level.effort, effortIndex: levels.indexOf(level),
         contextWindow: info?.context_window, reasoningFamily: evidence?.reasoningFamily,
+        asOf: evidence?.asOf ?? data.asOf,
+        strengths: evidence?.strengths,
         benchmark: evidence?.efforts[level.effort],
         rates: contextTokens > evidence?.longContext?.aboveInputTokens ? evidence.longContext.rates : evidence?.rates,
       }));

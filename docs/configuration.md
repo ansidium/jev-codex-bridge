@@ -1,126 +1,71 @@
 # Configuration
 
-The installation lives in `~/.config/jev-codex-bridge`.
-Override it with `--home PATH` or `JEV_BRIDGE_HOME`.
+Installation state lives in `~/.config/jev-codex-bridge`.
+Use `--home PATH` or `JEV_BRIDGE_HOME` to choose another directory.
 
-```powershell
-jev-bridge install --key-file "D:\Private\jev.env" --port 18767
-```
+## Installation modes
 
-The key file is read in place; credentials are not copied into the package,
-Codex configuration or task arguments. Existing environment variables take
-precedence. Both `TYPESAFE_API_KEY` and `JEV_API_KEY` are accepted.
+`jev-bridge install` prepares the optional CLI without a background service or
+global Codex changes. `--desktop` explicitly adds a persistent gateway and a
+named `jev.config.toml` profile. Select it with `codex --profile jev`.
 
-| Install option | Default or effect |
+| Option | Effect |
 | --- | --- |
-| `--key-file` | `~/.jev-router.env` |
-| `--port` | `18767` |
-| `--codex-home` | `CODEX_HOME`, or `~/.codex` |
-| `--task-name` | `JevCodexBridge` |
-| `--update-time` | Current local time; accepts `HH:mm` |
-| `--no-config` | Skip Codex configuration |
-| `--no-service` | Skip Windows task registration |
+| `--key-file PATH` | Read credentials in place; default `~/.jev-router.env` |
+| `--port NUMBER` | Persistent gateway port; default `18767` |
+| `--codex-home PATH` | Profile destination; default `CODEX_HOME` or `~/.codex` |
+| `--no-config` | Skip profile creation in Desktop mode |
+| `--no-service` | Skip Windows tasks in Desktop mode |
+| `--task-name NAME` | Windows task prefix; default `JevCodexBridge` |
+| `--update-time HH:mm` | Daily update time; default installation time |
 
-Separate installations need different ports and task names. After
-`--no-config`, start the service and run `jev-bridge configure`.
+The main `config.toml` is never rewritten. `jev-bridge configure` creates the
+optional profile after the service is ready. A previous profile is backed up.
+Separate installations need different ports and task names.
 
-Setup writes `model = "jev-router"`, `model_provider = "jev"` and the local
-Responses provider into `config.toml`. Other settings are preserved; the original
-file is saved under `backups/`. See [restoration](operations.md#disconnect).
+## Credentials
+
+Both `TYPESAFE_API_KEY` and `JEV_API_KEY` are accepted. Existing environment
+values take precedence. The CLI reads `.env` in its working directory,
+`~/.jev-router.env`, legacy `~/.jev-claude.env`, then the managed key file.
+The service reads its configured key file on startup.
+Keys are not copied into Codex settings or task arguments.
+
+## Models and classifier
+
+| Variable | Default or purpose |
+| --- | --- |
+| `JEV_CODEX_INCLUDE_MODELS` | Optional comma-separated allowlist |
+| `JEV_CODEX_EXCLUDE_MODELS` | Optional comma-separated exclusions |
+| `JEV_CODEX_FAST_MODEL` | Cold fallback `gpt-6-luna` |
+| `JEV_CODEX_BALANCED_MODEL` | Cold fallback `gpt-6.1-terra` |
+| `JEV_CODEX_STRONG_MODEL` | Cold fallback `gpt-6.1-sol` |
+| `JEV_CODEX_LONG_MODEL` | Cold fallback `gpt-6-astra` |
+| `JEV_ALLOW_FABLE=0` | Exclude the strongest compatibility tier |
+| `TYPESAFE_DEFAULT_MODEL` | Classifier; default `jev-1.14.0` |
+| `JEV_CODEX_REASSESS_TOOLS=1` | Opt in to continuous tool reassessment |
+
+The account catalog determines available models and reasoning levels. Filters
+apply to automatic selection and fallback. Manual models pass through.
+Catalogs are isolated by account or credential and Codex version; an empty
+catalog returns an error, while a failed first fetch permits cold fallbacks.
+
+`data/model-profiles.json` records prices, measurement dates and source URLs.
+Missing benchmark results remain unknown; they are never copied from another model.
+
+## Context and diagnostics
+
+The classifier receives the current task and relevant conversation by default.
+`JEV_ROUTING_CONTEXT=previous` limits it to the current and previous request.
+`JEV_PREVIOUS_CONTEXT_CHARS=0` omits the previous request; a finite limit must
+be at least 256 characters. The default preserves it in full.
+
+`JEV_DEBUG=1` enables routing diagnostics. `JEV_DUMP=PATH` writes full request
+snapshots; these may contain private conversation text.
 
 ## Existing tasks
 
-Changing a task's model does not change its provider. An OpenAI task can
-therefore reject `jev-router` as unsupported.
-
-Close Codex Desktop and any CLI using the task, then run:
-
-```sh
-jev-bridge attach THREAD_ID
-```
-
-Use the UUID from the copied task link and reopen Codex afterward.
-The service must be running and Codex must be on `PATH`. Attach resumes the same
-task through Codex's app-server without sending a model prompt. An active writer
-blocks attachment; database and rollout files are not edited directly.
-
-## Model policy
-
-Put the automatic model allowlist in the key file:
-
-```dotenv
-JEV_CODEX_INCLUDE_MODELS=gpt-6.1-sol,gpt-6-astra
-```
-
-Only those models and their catalog-supported efforts can be selected.
-GPT-6.1 Sol and Astra support `low`, `medium`, `high`, `xhigh`, `max` and `ultra`
-when exposed by the account. The user's reasoning selection is a ceiling.
-
-| Variable | Effect |
-| --- | --- |
-| `JEV_CODEX_INCLUDE_MODELS` | Comma-separated allowed IDs; unset allows all compatible models, empty allows none |
-| `JEV_CODEX_EXCLUDE_MODELS` | Comma-separated excluded IDs; exclusions take precedence |
-| `JEV_ALLOW_FABLE=0` | Disable the legacy frontier tier, including Astra |
-
-Filters apply to catalog choices and fallback. Hidden, API-disabled and
-Responses Lite-incompatible models are excluded. Manual selections pass through.
-
-Catalogs are cached per account or API credential and Codex client version.
-Concurrent cold requests share a fetch; explicit refreshes supersede pending
-cold fetches. A known empty catalog returns an error. Failed fetches can retry.
-
-If a catalog fetch fails before any catalog is loaded, these configurable
-compatibility aliases provide fallback IDs. The allowlist still applies:
-
-| Variable | Fallback ID |
-| --- | --- |
-| `JEV_CODEX_FAST_MODEL` | `gpt-6-luna` |
-| `JEV_CODEX_BALANCED_MODEL` | `gpt-5.6-terra` |
-| `JEV_CODEX_STRONG_MODEL` | `gpt-6.1-sol` |
-| `JEV_CODEX_LONG_MODEL` | `gpt-6-astra` |
-
-The Desktop service reads its configured key file. After changing that file,
-restart the service once active requests have finished.
-The CLI loads `.env` from its working directory, then `~/.jev-router.env` and
-the legacy `~/.jev-claude.env`, preserving values already set.
-
-## Routing context
-
-The classifier defaults to `jev-1.13.0`.
-`TYPESAFE_DEFAULT_MODEL` overrides the classifier version.
-
-| `JEV_ROUTING_CONTEXT` | Text sent to Jev |
-| --- | --- |
-| `task` (default) | Current request, user/assistant history, repository constraints, reasoning summaries, tool calls and results |
-| `full` | Task context plus system/developer instructions and tool schemas |
-| `previous` | Current and previous user requests, without message/tool history |
-
-Task mode retains AGENTS.md supplied in user context and constraints read through
-tools. Use `full` when a custom client places task constraints in system/developer
-messages. Identified `msg_jev-` commentary notices are excluded in both modes.
-
-Images, audio and files become content-unavailable indicators. Binary payloads,
-encrypted reasoning and authentication headers are not sent to Jev.
-Environment-only messages are omitted. These filters do not change the
-conversation sent to OpenAI.
-
-The previous request is supplied when absent from history, including after a
-restart. `JEV_PREVIOUS_CONTEXT_CHARS` can limit that field: `0` disables it;
-integers of at least `256` cap it. The default is unlimited.
-
-The bridge budgets 32k tokens for state plus the longest question and 64k for the
-batched request. Oversized routing text is fitted with omission markers,
-prioritizing the current request, constraints, reasoning summaries and failed
-tool evidence. Fitting can omit relevant details; it is not an exact tokenizer.
-A `max_tokens_exceeded` response triggers a smaller-context retry within the
-same 10-second deadline. `$jev-explain` reports the mode and fitting.
-
-## Diagnostics
-
-Decisions are stored under `jev-claude` in Node's temporary directory. Each task
-retains 20 decisions with prompt text, routing context and Jev exchanges. Files
-older than seven days are pruned during writes. Unix files use owner-only
-permissions; Windows uses the temporary directory's ACLs.
-
-`JEV_DEBUG` enables routing logs. `JEV_DUMP` writes request bodies under the
-given path prefix. Both default to off. Diagnostics can contain private text.
+For an explicit provider migration, close the task in Codex Desktop and CLI,
+then run `jev-bridge attach THREAD_ID`. The service and optional profile must
+be configured. Attachment uses Codex's app-server without starting a model turn;
+active writers block it. Reopen the task with the Jev profile.

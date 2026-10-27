@@ -12,9 +12,10 @@ function server(t, mode = "ok") {
   const script = join(root, "server.mjs"), log = join(root, "requests.jsonl");
   writeFileSync(log, "");
   writeFileSync(script, `
-    import { appendFileSync } from "node:fs";
+    import { appendFileSync, writeFileSync } from "node:fs";
     import { createInterface } from "node:readline";
     const [log, mode] = process.argv.slice(2);
+    writeFileSync(log + ".args", JSON.stringify(process.argv.slice(4)));
     const lines = createInterface({ input: process.stdin });
     lines.on("line", line => {
       const request = JSON.parse(line);
@@ -42,6 +43,7 @@ function server(t, mode = "ok") {
   return {
     options: { command: { file: process.execPath, prefix: [script, log, mode], shell: false }, timeout: 3000 },
     requests: () => readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse),
+    args: () => JSON.parse(readFileSync(log + ".args", "utf8")),
   };
 }
 
@@ -51,6 +53,17 @@ test("attaching resumes the same thread with its provider and model together, wi
   const requests = mock.requests();
   assert.deepEqual(requests.map(r => r.method), ["initialize", "initialized", "thread/read", "thread/resume"]);
   assert.deepEqual(requests.at(-1).params, { threadId, modelProvider: "jev", model: "jev-router", excludeTurns: true });
+});
+
+test("explicit attachment supplies the optional provider to its temporary app-server only", async t => {
+  const mock = server(t);
+  await attachThread(threadId, { ...mock.options, providerConfig: { name: "Jev Router",
+    base_url: "http://127.0.0.1:18767", wire_api: "responses", requires_openai_auth: true } });
+  assert.deepEqual(mock.args(), ["app-server", "--stdio",
+    "--config", 'model_providers.jev.name="Jev Router"',
+    "--config", 'model_providers.jev.base_url="http://127.0.0.1:18767"',
+    "--config", 'model_providers.jev.wire_api="responses"',
+    "--config", "model_providers.jev.requires_openai_auth=true"]);
 });
 
 test("a thread owned by Desktop is never forced open or archived", async t => {
